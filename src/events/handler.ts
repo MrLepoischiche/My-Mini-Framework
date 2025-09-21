@@ -39,7 +39,7 @@ export function registerEventHandler(
     handler: (event: Event) => void
 ): string {
     const id = generateId();
-    eventRegistry.set(id, { id, handler, eventType });
+    eventRegistry.set(id, { id: elementId, handler, eventType });
     initializeEventSystem();
     return id;
 }
