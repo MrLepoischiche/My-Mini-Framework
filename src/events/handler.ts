@@ -34,7 +34,6 @@ export function initializeEventSystem(): void {
 
 // Enregistrer un handler d'événement
 export function registerEventHandler(
-    elementId: string, 
     eventType: string, 
     handler: (event: Event) => void
 ): string {

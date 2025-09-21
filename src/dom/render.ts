@@ -67,7 +67,7 @@ function applyProps(element: HTMLElement, props: ElementProps): void {
             if (!id) {
                 element.id = generateId();
             }
-            const eventId = registerEventHandler(element.id, eventType, value);
+            const eventId = registerEventHandler(eventType, value);
             // Stocker par type d'événement
             element.dataset[`event${eventType.charAt(0).toUpperCase() + eventType.slice(1)}Id`] = eventId;
         } else if (key === 'style' && typeof value === 'object' && value !== null) {
