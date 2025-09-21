@@ -286,4 +286,4 @@ export default function TodoApp() {
     );
 }
 
-render(TodoApp, document.getElementById('app')!);
+render(TodoApp, document.getElementById('todo-app')!);
