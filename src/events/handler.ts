@@ -37,7 +37,7 @@ export function registerEventHandler(
     eventType: string, 
     handler: (event: Event) => void
 ): string {
-    const id = generateId();
+    const id = `event-${Date.now()}-${generateId()}`;
     eventRegistry.set(id, { id, handler, eventType });
     initializeEventSystem();
     return id;

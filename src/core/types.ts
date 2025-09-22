@@ -1,6 +1,7 @@
 // Type pour les propriétés d'un élément (attributs + événements)
 export interface ElementProps {
   [key: string]: any;
+  key?: string | number;
   // Attributs HTML classiques
   id?: string;
   class?: string | string[];

@@ -3,8 +3,18 @@ import { registerEventHandler, removeEventHandler } from '../events/handler';
 import { globalStore } from '../state/store';
 import { generateId } from '../utils/id';
 
+// -------------- Types & Interfaces --------------
+
 // Type pour une fonction qui crée un élément virtuel
 type ComponentFunction = () => VirtualElement;
+
+// Structure pour les enfants avec et sans clés
+interface KeyedChildren {
+    withKeys: Array<{ key: string; child: ElementChild; index: number }>;
+    withoutKeys: Array<{ child: ElementChild; index: number }>;
+}
+
+// ------------------------------------------------
 
 // -------------- Variables globales --------------
 
@@ -105,10 +115,8 @@ function rerender(): void {
         if (lastVirtualDOM) {
             const existingElement = lastRender.container.firstElementChild as HTMLElement;
             if (existingElement) {
-                console.log('Rerender: Using diffAndPatch');
                 diffAndPatch(existingElement, lastVirtualDOM, currentVirtualDOM);
             } else {
-                console.log('Rerender: No existing element');
                 renderElement(currentVirtualDOM, lastRender.container);
             }
         } else {
@@ -122,11 +130,8 @@ function rerender(): void {
 
 // Fonction pour comparer et patcher deux Virtual DOM
 function diffAndPatch(domNode: HTMLElement, oldVNode: VirtualElement, newVNode: VirtualElement): void {
-    console.log('Diffing:', oldVNode, '->', newVNode);
-
     // Cas 1: Tags différents (remplacement complet)
     if (oldVNode.tag !== newVNode.tag) {
-        console.log('Replacing element entirely');
         const newElement = createElement(newVNode);
         if (domNode.parentNode && newElement) {
             domNode.parentNode.replaceChild(newElement, domNode);
@@ -135,7 +140,6 @@ function diffAndPatch(domNode: HTMLElement, oldVNode: VirtualElement, newVNode: 
     }
 
     // Cas 2: Même tag (mise à jour)
-    console.log('Updating element props and children');
     diffProps(domNode, oldVNode.props, newVNode.props);
     diffChildren(domNode, oldVNode.children, newVNode.children);
 }
@@ -212,29 +216,123 @@ function updateChild(parent: HTMLElement, domChild: ChildNode, oldChild: Element
     }
 }
 
-// Fonction pour comparer et patcher les enfants
-function diffChildren(domNode: HTMLElement, oldChildren: ElementChild[], newChildren: ElementChild[]): void {
-    const maxLength = Math.max(oldChildren.length, newChildren.length);
+// Séparer les enfants avec et sans keys
+function extractKeyedChildren(children: ElementChild[]): KeyedChildren {
+    const withKeys: Array<{ key: string; child: ElementChild; index: number }> = [];
+    const withoutKeys: Array<{ child: ElementChild; index: number }> = [];
+    
+    children.forEach((child, index) => {
+        if (child && typeof child === 'object' && 'props' in child && child.props.key !== undefined) {
+            withKeys.push({ key: String(child.props.key), child, index });
+        } else {
+            withoutKeys.push({ child, index });
+        }
+    });
+    
+    return { withKeys, withoutKeys };
+}
 
+// Diff avec gestion des keys
+function diffChildrenWithKeys(
+    domNode: HTMLElement, 
+    oldKeyed: KeyedChildren, 
+    newKeyed: KeyedChildren
+): void {
+    // Créer une map des anciens éléments par key
+    const oldKeyMap = new Map<string, { child: ElementChild; domIndex: number }>();
+    oldKeyed.withKeys.forEach(({ key, child, index }) => {
+        oldKeyMap.set(key, { child, domIndex: index });
+    });
+
+    // Suivre les nœuds DOM utilisés pour éviter les doublons
+    const usedDomNodes = new Set<number>();
+    let insertionIndex = 0;
+
+    // Traiter les nouveaux éléments avec keys
+    newKeyed.withKeys.forEach(({ key, child: newChild, index: newIndex }) => {
+        const oldItem = oldKeyMap.get(key);
+        
+        if (oldItem && !usedDomNodes.has(oldItem.domIndex)) {
+            // Element existant avec même key - mettre à jour et déplacer si nécessaire
+            const domChild = domNode.childNodes[oldItem.domIndex];
+            
+            if (typeof oldItem.child === 'object' && typeof newChild === 'object' &&
+                oldItem.child && 'tag' in oldItem.child && newChild && 'tag' in newChild) {
+                updateChild(domNode, domChild, oldItem.child, newChild);
+            }
+            
+            // Déplacer le nœud à la bonne position si nécessaire
+            if (oldItem.domIndex !== insertionIndex) {
+                domNode.insertBefore(domChild, domNode.childNodes[insertionIndex]);
+            }
+            
+            usedDomNodes.add(oldItem.domIndex);
+        } else {
+            // Nouvel élément - créer et insérer
+            const newDomChild = createDomChild(newChild);
+            if (insertionIndex >= domNode.childNodes.length) {
+                domNode.appendChild(newDomChild);
+            } else {
+                domNode.insertBefore(newDomChild, domNode.childNodes[insertionIndex]);
+            }
+        }
+        
+        insertionIndex++;
+    });
+
+    // Gérer les éléments sans keys
+    newKeyed.withoutKeys.forEach(({ child: newChild }) => {
+        const newDomChild = createDomChild(newChild);
+        if (insertionIndex >= domNode.childNodes.length) {
+            domNode.appendChild(newDomChild);
+        } else {
+            domNode.insertBefore(newDomChild, domNode.childNodes[insertionIndex]);
+        }
+        insertionIndex++;
+    });
+
+    // Supprimer les nœuds excédentaires à la fin
+    while (domNode.childNodes.length > insertionIndex) {
+        const lastChild = domNode.lastChild!;
+        domNode.removeChild(lastChild);
+    }
+}
+
+// Fallback sans keys (votre algorithme actuel)
+function diffChildrenByIndex(domNode: HTMLElement, oldChildren: ElementChild[], newChildren: ElementChild[]): void {
+    const maxLength = Math.max(oldChildren.length, newChildren.length);
+    
     for (let i = 0; i < maxLength; i++) {
         const oldChild = oldChildren[i];
         const newChild = newChildren[i];
         const domChild = domNode.childNodes[i];
 
         if (newChild === undefined || newChild === null) {
-            // Supprimer l'enfant excédentaire
             if (domChild) {
                 domNode.removeChild(domChild);
             }
         } else if (oldChild === undefined || oldChild === null) {
-            // Ajouter un nouvel enfant
             const newDomChild = createDomChild(newChild);
             domNode.appendChild(newDomChild);
-        } else if (domChild) {
-            // Mettre à jour l'enfant existant
+        } else {
             updateChild(domNode, domChild, oldChild, newChild);
         }
     }
+}
+
+// Fonction pour comparer et patcher les enfants
+function diffChildren(domNode: HTMLElement, oldChildren: ElementChild[], newChildren: ElementChild[]): void {
+    const oldKeyedChildren = extractKeyedChildren(oldChildren);
+    const newKeyedChildren = extractKeyedChildren(newChildren);
+    
+    // Si pas de keys, utiliser l'ancien algorithme simple
+    if (oldKeyedChildren.withKeys.length === 0 && newKeyedChildren.withKeys.length === 0) {
+        diffChildrenByIndex(domNode, oldChildren, newChildren);
+        return;
+    }
+    
+    // Algorithme avec keys
+    diffChildrenWithKeys(domNode, oldKeyedChildren, newKeyedChildren);
 }
 
 // -------------------------------------------------
@@ -256,18 +354,15 @@ export function render(
     const currentVirtualDOM = typeof elementOrFunction === 'function' ? elementOrFunction() : elementOrFunction;
 
     if (lastVirtualDOM && typeof elementOrFunction === 'function') {
-        console.log('DIFF MODE: Using diffAndPatch');
         const existingElement = container.firstElementChild as HTMLElement | null;
         if (existingElement) {
             diffAndPatch(existingElement, lastVirtualDOM, currentVirtualDOM);
         } else {
             // Pas d'élément existant, rendu complet
-            console.log('No existing element, full render');
             renderElement(currentVirtualDOM, container);
         }
     } else {
         // Premier rendu ou élément statique
-        console.log('FULL RENDER MODE');
         renderElement(currentVirtualDOM, container);
     }
 
@@ -286,7 +381,6 @@ export function render(
         lastRender = { createComponent: elementOrFunction, container };
 
         unsubscribe = globalStore.subscribe(() => {
-            console.log('State changed, re-rendering...');
             rerender();
         });
     }

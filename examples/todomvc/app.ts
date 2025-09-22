@@ -1,4 +1,5 @@
-import { div, h1, p, a, input, ul, li, button, span, label, render, setState, getState } from '../../src/index';
+import { generateId } from '../../src/utils/id';
+import { div, h1, a, input, ul, li, button, span, label, render, setState, getState } from '../../src/index';
 
 // ------------- Types pour TodoMVC -------------
 interface Todo {
@@ -23,11 +24,6 @@ setState<TodoState>({
 });
 
 // ------------ Fonctions utilitaires ------------
-
-// Générer un ID unique simple
-function generateId(): string {
-    return `event-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-}
 
 // Récupérer l'état
 function getCurrentState(): TodoState {
@@ -203,23 +199,25 @@ function TodoItem(todo: Todo) {
         );
     }
 
-    return li({ class: todo.completed ? 'completed' : '' },
-        div({ class: 'view' },
-            input({
-                class: 'toggle',
-                type: 'checkbox',
-                checked: todo.completed,
-                onChange: () => toggleTodo(todo.id)
-            }),
-            label({
-                onDblClick: () => startEditing(todo.id)
-            }, todo.text),
-            button({
-                class: 'destroy',
-                onClick: () => deleteTodo(todo.id)
-            })
-        )
-    );
+    return li({
+        key: todo.id,
+        class: todo.completed ? 'completed' : ''
+    },
+    div({ class: 'view' },
+        input({
+            class: 'toggle',
+            type: 'checkbox',
+            checked: todo.completed,
+            onChange: () => toggleTodo(todo.id)
+        }),
+        label({
+            onDblClick: () => startEditing(todo.id)
+        }, todo.text),
+        button({
+            class: 'destroy',
+            onClick: () => deleteTodo(todo.id)
+        })
+    ));
 }
 
 function TodoFooter() {
