@@ -5,3 +5,6 @@ package-lock.json
 # build output
 dist/
 build/
+
+# test files
+main.ts

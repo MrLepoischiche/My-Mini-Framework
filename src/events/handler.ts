@@ -43,6 +43,26 @@ export function registerEventHandler(
     return id;
 }
 
+// Supprimer un handler d'événement
+export function removeEventHandler(eventId: string): void {
+    const handler = eventRegistry.get(eventId);
+    if (handler) {
+        eventRegistry.delete(eventId);
+    }
+}
+
+// Helper pour supprimer tous les événements d'un élément
+export function removeElementEventHandlers(element: HTMLElement): void {
+    for (const key in element.dataset) {
+        if (key.startsWith('event') && key.endsWith('Id')) {
+            const eventId = element.dataset[key];
+            if (eventId && eventRegistry.has(eventId)) {
+                removeEventHandler(eventId);
+            }
+        }
+    }
+}
+
 // Dispatcher un événement vers le bon handler
 function dispatchEvent(event: Event): void {
     let target = event.target as HTMLElement;
