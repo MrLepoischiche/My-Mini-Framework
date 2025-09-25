@@ -5,13 +5,12 @@
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "declaration": true,
     "outDir": "./dist",
-    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "node"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "examples/**/*"],
   "exclude": ["node_modules", "dist"]
 }

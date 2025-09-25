@@ -130,7 +130,14 @@ function rerender(): void {
 
 // Fonction pour comparer et patcher deux Virtual DOM
 function diffAndPatch(domNode: HTMLElement, oldVNode: VirtualElement, newVNode: VirtualElement): void {
-    // Cas 1: Tags différents (remplacement complet)
+    // Vérifier si les deux sont mémorisés avec la même clé
+    if (oldVNode.__memoized && newVNode.__memoized && 
+        oldVNode.__memoKey === newVNode.__memoKey) {
+        console.log('Skipping diff for memoized component');
+        return; // Pas de changement, skip le diff
+    }
+
+    // Si les tags sont différents (remplacement complet)
     if (oldVNode.tag !== newVNode.tag) {
         const newElement = createElement(newVNode);
         if (domNode.parentNode && newElement) {
@@ -139,7 +146,7 @@ function diffAndPatch(domNode: HTMLElement, oldVNode: VirtualElement, newVNode: 
         return;
     }
 
-    // Cas 2: Même tag (mise à jour)
+    // Même tag (mise à jour)
     diffProps(domNode, oldVNode.props, newVNode.props);
     diffChildren(domNode, oldVNode.children, newVNode.children);
 }

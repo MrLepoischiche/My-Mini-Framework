@@ -18,9 +18,11 @@ export type ElementChild = string | number | VirtualElement | null | undefined;
 
 // Structure d'un élément virtuel
 export interface VirtualElement {
-  tag: string;
-  props: ElementProps;
-  children: ElementChild[];
+    tag: string;
+    props: ElementProps;
+    children: ElementChild[];
+    __memoized?: boolean;
+    __memoKey?: string;
 }
 
 // Type pour la fonction de création d'élément
