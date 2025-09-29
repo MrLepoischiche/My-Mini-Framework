@@ -1,3 +1,5 @@
+import { PathBuilder } from "../utils/pathBuilder";
+
 // Types pour les listeners de changement d'état
 type StateListener<T> = (newState: T, oldState: T) => void;
 type PathListener = (newValue: any, oldValue: any) => void;
@@ -29,41 +31,124 @@ export class Store<T = any> {
         return this.getValueByPathAndObject(this.state, path);
     }
 
-    // Obtenir une valeur dans l'état par son chemin (ex: "user.name")
+    // Obtenir une valeur dans l'état par son chemin (ex: "user.name", "matrix[0][1].value")
     private getValueByPathAndObject(obj: any, path: string): any {
-        return path.split('.').reduce((current, key) => {
-            if (key.includes('[') && key.includes(']')) {
-                const [arrayKey, indexStr] = key.split('[');
-                const index = parseInt(indexStr.replace(']', ''));
-                return current?.[arrayKey]?.[index];
+        if (!path) return obj;
+
+        let current = obj;
+        let i = 0;
+
+        while (i < path.length && current !== null && current !== undefined) {
+            // Find next delimiter (. or [)
+            let nextDelimiter = path.length;
+            const dotIndex = path.indexOf('.', i);
+            const bracketIndex = path.indexOf('[', i);
+
+            if (dotIndex !== -1) nextDelimiter = Math.min(nextDelimiter, dotIndex);
+            if (bracketIndex !== -1) nextDelimiter = Math.min(nextDelimiter, bracketIndex);
+
+            if (nextDelimiter === i) {
+                // We're at a delimiter, handle it
+                if (path[i] === '.') {
+                    i++; // Skip the dot
+                    continue;
+                } else if (path[i] === '[') {
+                    // Find the closing bracket
+                    const closingBracket = path.indexOf(']', i);
+                    if (closingBracket === -1) break;
+
+                    const index = parseInt(path.substring(i + 1, closingBracket));
+                    if (isNaN(index)) break;
+
+                    current = current[index];
+                    i = closingBracket + 1;
+                    continue;
+                }
+            } else {
+                // Extract property name
+                const propertyName = path.substring(i, nextDelimiter);
+                current = current[propertyName];
+                i = nextDelimiter;
             }
-            return current?.[key];
-        }, obj);
+        }
+
+        return current;
+    }
+
+    // Détecter tous les chemins qui ont changé entre deux états
+    private detectChangedPaths(oldState: T, newState: T, basePath: string = ''): string[] {
+        const changedPaths: string[] = [];
+        
+        // Vérifier que nous avons des objets à comparer
+        if (!oldState || !newState || typeof oldState !== 'object' || typeof newState !== 'object') {
+            return changedPaths;
+        }
+        
+        // Vérifier toutes les clés de newState
+        for (const key in newState) {
+            const fullPath = basePath ? `${basePath}.${key}` : key;
+            const oldValue = oldState[key];
+            const newValue = newState[key];
+            
+            if (oldValue !== newValue) {
+                changedPaths.push(fullPath);
+                
+                // Si c'est un objet/array, descendre récursivement pour plus de granularité
+                if (newValue && typeof newValue === 'object' && 
+                    oldValue && typeof oldValue === 'object') {
+                    
+                    if (Array.isArray(newValue) && Array.isArray(oldValue)) {
+                        // Gérer les arrays avec indices
+                        const maxLength = Math.max(oldValue.length, newValue.length);
+                        for (let i = 0; i < maxLength; i++) {
+                            const arrayPath = `${fullPath}[${i}]`;
+                            if (oldValue[i] !== newValue[i]) {
+                                changedPaths.push(arrayPath);
+                                
+                                // Récursion sur les éléments d'array si ce sont des objets
+                                if (newValue[i] && typeof newValue[i] === 'object' &&
+                                    oldValue[i] && typeof oldValue[i] === 'object') {
+                                    changedPaths.push(...this.detectChangedPaths(
+                                        oldValue[i] as T, newValue[i] as T, arrayPath
+                                    ));
+                                }
+                            }
+                        }
+                    } else {
+                        // Récursion sur les objets
+                        changedPaths.push(...this.detectChangedPaths(
+                            oldValue as T, newValue as T, fullPath
+                        ));
+                    }
+                }
+            }
+        }
+
+        const oldStateObj = oldState as Record<string, any>;
+        const newStateObj = newState as Record<string, any>;
+        
+        // Vérifier les propriétés supprimées (présentes dans oldState mais pas newState)
+        for (const key in oldStateObj) {
+            if (!(key in newStateObj)) {
+                const fullPath = basePath ? `${basePath}.${key}` : key;
+                changedPaths.push(fullPath);
+            }
+        }
+        
+        return changedPaths;
     }
 
     // Notifier les listeners abonnés aux chemins spécifiques
     private notifyPathListeners(oldState: T, newState: T): void {
         this.pathListeners.forEach((listeners, path) => {
+            // Check if this specific path changed by comparing values
             const oldValue = this.getValueByPathAndObject(oldState, path);
             const newValue = this.getValueByPathAndObject(newState, path);
-            
+
             if (oldValue !== newValue) {
                 listeners.forEach(listener => listener(newValue, oldValue));
             }
         });
-    }
-
-    // Détecter quels chemins ont changé
-    private detectChangedPaths(oldState: T, newState: T): string[] {
-        const changedPaths: string[] = [];
-        
-        for (const key in newState) {
-            if (oldState[key] !== newState[key]) {
-                changedPaths.push(key);
-            }
-        }
-        
-        return changedPaths;
     }
 
     // Exécuter toutes les mises à jour en une fois
@@ -103,6 +188,12 @@ export class Store<T = any> {
             });
         }
     }
+    
+    // Notification immédiate des listeners
+    private notifyListeners(oldState: T, newState: T): void {
+        this.notifyPathListeners(oldState, newState);
+        this.listeners.forEach(listener => listener(newState, oldState));
+    }
 
     // Forcer l'exécution immédiate des updates (utile pour les tests)
     flushSync(): void {
@@ -112,11 +203,7 @@ export class Store<T = any> {
         }
     }
 
-    // Notification immédiate des listeners
-    private notifyListeners(oldState: T, newState: T): void {
-        this.notifyPathListeners(oldState, newState);
-        this.listeners.forEach(listener => listener(newState, oldState));
-    }
+    
 
     // Modifier l'état immédiatement
     setState(newState: Partial<T> | ((prevState: T) => T)): void {
@@ -168,36 +255,17 @@ export class Store<T = any> {
             }
         };
     }
+
+    createPath(): PathBuilder<T> {
+        return new PathBuilder<T>();
+    }
+
+    subscribeToPath<U>(pathBuilder: PathBuilder<U>, listener: PathListener): () => void {
+        return this.subscribeTo(pathBuilder.path(), listener);
+    }
 }
 
 // ------------ Fonctions utilitaires ------------
-
-// Détecter les changements entre deux états (shallow comparison)
-function detectChanges<T>(oldState: T, newState: T): string[] {
-    const changedKeys: string[] = [];
-    
-    // Comparer chaque clé du nouvel état
-    for (const key in newState) {
-        if (oldState[key] !== newState[key]) {
-            changedKeys.push(key);
-            
-            // Si c'est un array, détecter quels éléments ont changé
-            if (Array.isArray(oldState[key]) && Array.isArray(newState[key])) {
-                const oldArray = oldState[key] as any[];
-                const newArray = newState[key] as any[];
-                
-                // Comparer chaque élément par référence
-                for (let i = 0; i < Math.max(oldArray.length, newArray.length); i++) {
-                    if (oldArray[i] !== newArray[i]) {
-                        changedKeys.push(`${key}[${i}]`);
-                    }
-                }
-            }
-        }
-    }
-    
-    return changedKeys;
-}
 
 // -----------------------------------------------
 
@@ -217,4 +285,12 @@ export function setState<T>(newState: Partial<T> | ((prevState: T) => T)) {
 
 export function setBatchedState<T>(newState: Partial<T> | ((prevState: T) => T)) {
     globalStore.setBatchedState(newState);
+}
+
+export function subscribeToPath<U>(pathBuilder: PathBuilder<U>, listener: PathListener): () => void {
+    return globalStore.subscribeToPath(pathBuilder, listener);
+}
+
+export function createStatePath(): PathBuilder<any> {
+    return globalStore.createPath();
 }

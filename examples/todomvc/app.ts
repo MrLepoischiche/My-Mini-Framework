@@ -20,6 +20,7 @@ import {
 
     generateId
 } from '../../src/index';
+import { createStatePath } from '../../src/state/store';
 
 // ------------- Types pour TodoMVC -------------
 
@@ -53,19 +54,58 @@ setState<TodoState>({
 // Composant TodoItem réactif
 class TodoItemComponent extends ReactiveComponent {
     constructor(todoId: string) {
-        super(
-            [`todos`],
-            (props) => this.renderTodo(props),
-            { todoId },
-            (newTodos: Todo[], oldTodos: Todo[]) => {
-                if (!oldTodos) return true; // Premier rendu
+        const todos = getCurrentState().todos;
+        const todoIndex = todos.findIndex(t => t.id === todoId);
 
-                const newTodo = newTodos?.find(t => t.id === todoId);
-                const oldTodo = oldTodos?.find(t => t.id === todoId);
+        if (todoIndex === -1) {
+            super(
+                [`todos`],
+                (props) => this.renderTodo(props),
+                { todoId },
+                (newValue: any, oldValue: any, path: string) => {
+                    if (!oldValue) return true; // Premier rendu
 
-                return !todoEqual(newTodo, oldTodo);
-            }
-        );
+                    // Si le chemin est 'todos', on a la liste complète
+                    if (path === 'todos') {
+                        const newTodos = newValue as Todo[];
+                        const oldTodos = oldValue as Todo[];
+                        const newTodo = newTodos?.find(t => t.id === todoId);
+                        const oldTodo = oldTodos?.find(t => t.id === todoId);
+                        return !todoEqual(newTodo, oldTodo);
+                    }
+
+                    // Pour les autres chemins, comparer directement les valeurs
+                    return newValue !== oldValue;
+                }
+            );
+        } else {
+            const paths = [
+                `todos[${todoIndex}].text`,
+                `todos[${todoIndex}].completed`,
+                'editingId'
+            ];
+
+            super(
+                paths,
+                (props) => this.renderTodo(props),
+                { todoId },
+                (newValue: any, oldValue: any, path: string) => {
+                    if (!oldValue) return true; // Premier rendu
+
+                    // Si le chemin est 'todos', on a la liste complète
+                    if (path === 'todos') {
+                        const newTodos = newValue as Todo[];
+                        const oldTodos = oldValue as Todo[];
+                        const newTodo = newTodos?.find(t => t.id === todoId);
+                        const oldTodo = oldTodos?.find(t => t.id === todoId);
+                        return !todoEqual(newTodo, oldTodo);
+                    }
+
+                    // Pour les autres chemins, comparer directement les valeurs
+                    return newValue !== oldValue;
+                }
+            );
+        }
 
         this.equals = (oldTodos: Todo[], newTodos: Todo[]) => {
             const oldTodo = oldTodos?.find(t => t.id === todoId);

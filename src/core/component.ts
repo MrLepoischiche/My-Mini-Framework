@@ -1,6 +1,7 @@
 import { globalStore } from '../state/store';
 import { VirtualElement } from './types';
 import { createElement } from '../dom/render';
+import { deepEqual } from '../utils/equality';
 
 export interface ComponentLifecycle {
     mount(container: HTMLElement): void;
@@ -47,7 +48,7 @@ export class ReactiveComponent implements ComponentLifecycle {
     update(newProps: any): void {
         if (!this.isMounted) return;
         
-        if (JSON.stringify(this.props) !== JSON.stringify(newProps)) {
+        if (!deepEqual(this.props, newProps)) {
             this.props = newProps;
             this.render();
         }

@@ -1,5 +1,5 @@
 import { VirtualElement, ElementChild, ElementProps } from '../core/types';
-import { registerEventHandler, removeEventHandler } from '../events/handler';
+import { registerEventHandler, removeEventHandler, updateEventHandler } from '../events/handler';
 import { globalStore } from '../state/store';
 import { generateId } from '../utils/id';
 
@@ -133,7 +133,6 @@ function diffAndPatch(domNode: HTMLElement, oldVNode: VirtualElement, newVNode: 
     // Vérifier si les deux sont mémorisés avec la même clé
     if (oldVNode.__memoized && newVNode.__memoized && 
         oldVNode.__memoKey === newVNode.__memoKey) {
-        console.log('Skipping diff for memoized component');
         return; // Pas de changement, skip le diff
     }
 
@@ -175,17 +174,21 @@ function diffProps(domNode: HTMLElement, oldProps: ElementProps, newProps: Eleme
         const newValue = newProps[key];
         const oldValue = oldProps[key];
         
-        if (newValue !== oldValue) {
-            // Pour les événements, supprimer l'ancien avant d'ajouter le nouveau
-            if (key.startsWith('on') && oldValue) {
-                const eventType = key.slice(2).toLowerCase();
-                const eventIdKey = `event${eventType.charAt(0).toUpperCase() + eventType.slice(1)}Id`;
-                const oldEventId = domNode.dataset[eventIdKey];
-                if (oldEventId) {
-                    removeEventHandler(oldEventId);
-                }
+        if (key.startsWith('on')) {
+            // Pour les événements : toujours mettre à jour le handler
+            const eventType = key.slice(2).toLowerCase();
+            const eventIdKey = `event${eventType.charAt(0).toUpperCase() + eventType.slice(1)}Id`;
+            const existingEventId = domNode.dataset[eventIdKey];
+
+            if (existingEventId) {
+                // Mettre à jour le handler existant au lieu de le recréer
+                updateEventHandler(existingEventId, newValue);
+            } else {
+                // Créer un nouveau handler
+                applySingleProp(domNode, key, newValue);
             }
-            
+        } else if (newValue !== oldValue) {
+            // Pour les autres props : comparer normalement
             applySingleProp(domNode, key, newValue);
         }
     }
@@ -256,7 +259,7 @@ function diffChildrenWithKeys(
     let insertionIndex = 0;
 
     // Traiter les nouveaux éléments avec keys
-    newKeyed.withKeys.forEach(({ key, child: newChild, index: newIndex }) => {
+    newKeyed.withKeys.forEach(({ key, child: newChild }) => {
         const oldItem = oldKeyMap.get(key);
         
         if (oldItem && !usedDomNodes.has(oldItem.domIndex)) {
