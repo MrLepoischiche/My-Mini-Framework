@@ -1,15 +1,15 @@
 import { VirtualElement } from "./types";
 import { shallowEqual } from "../utils/equality";
 
-// Interface pour stocker les informations de mémoïsation
-interface MemoizedComponent {
+// Interface pour stocker les informations de mémoïsation (générique)
+interface MemoizedFunction<R = any> {
     lastProps: any;
-    lastResult: VirtualElement;
-    component: (...args: any[]) => VirtualElement;
+    lastResult: R;
+    func: (...args: any[]) => R;
 }
 
-// Cache pour les composants mémoïsés
-const memoCache = new Map<Function, MemoizedComponent>();
+// Cache pour les fonctions mémoïsées (générique)
+const memoCache = new Map<Function, MemoizedFunction>();
 // Cache pour les composants réactifs
 const reactiveComponentCache = new WeakMap<Function, { lastProps: any; lastResult: any }>();
 
@@ -22,30 +22,34 @@ const handlerIds = new WeakMap<Function, number>();
 // -----------------------------------------------
 
 
-// Fonction de mémoïsation pour les composants
-export function memo<T extends any[]>(
-    component: (...args: T) => VirtualElement,
+// Fonction de mémoïsation générique (peut mémoïser n'importe quelle fonction)
+export function memo<T extends any[], R>(
+    func: (...args: T) => R,
     areEqual?: (prevArgs: T, nextArgs: T) => boolean
-): (...args: T) => VirtualElement {
+): (...args: T) => R {
     return (...args: T) => {
-        const cached = memoCache.get(component);
-        
+        const cached = memoCache.get(func);
+
         if (cached && (areEqual ? areEqual(cached.lastProps, args) : shallowEqual(cached.lastProps, args))) {
-            // Marquer le résultat comme étant du cache
-            return {
-                ...cached.lastResult,
-                __memoized: true,
-                __memoKey: JSON.stringify(args) // Clé pour identifier le cache
-            };
+            // Retourner le résultat du cache
+            // Si c'est un VirtualElement, on peut ajouter des métadonnées
+            if (cached.lastResult && typeof cached.lastResult === 'object' && 'tag' in cached.lastResult) {
+                return {
+                    ...cached.lastResult as any,
+                    __memoized: true,
+                    __memoKey: JSON.stringify(args)
+                } as R;
+            }
+            return cached.lastResult;
         }
-        
-        const result = component(...args);
-        memoCache.set(component, {
+
+        const result = func(...args);
+        memoCache.set(func, {
             lastProps: args,
             lastResult: result,
-            component
+            func
         });
-        
+
         return result;
     };
 }

@@ -12,4 +12,4 @@ vite.test.config.ts
 
 # any .md files that is not README.md
 *.md
-!README.md
+!README*.md

@@ -1,218 +1,364 @@
 # Mini Framework
 
-Un framework JavaScript léger avec Virtual DOM, state management réactif, système d'événements custom et routing.
+A lightweight JavaScript framework with Virtual DOM, reactive state management, custom event system, routing, and advanced performance features.
 
-## Table des matières
+## Table of Contents
 
 1. [Installation](#installation)
 2. [Architecture](#architecture)
-3. [Démarrage rapide](#démarrage-rapide)
-4. [API de base](#api-de-base)
+3. [Quick Start](#quick-start)
+4. [Core API](#core-api)
 5. [State Management](#state-management)
-6. [Event Handling](#event-handling)
-7. [Routing](#routing)
-8. [Exemples](#exemples)
+6. [Reactive Components](#reactive-components)
+7. [Event Handling](#event-handling)
+8. [Performance Optimization](#performance-optimization)
+9. [Lazy Loading](#lazy-loading)
+10. [Routing](#routing)
+11. [Examples](#examples)
 
 ## Installation
 ```bash
-# Cloner le projet
-git clone https://zone01normandie.org/git/ejean/mini-framework.git
+# Clone the project
+git clone https://github.com/MrLepoischiche/My-Mini-Framework.git
 cd mini-framework
 
-# Installer les dépendances
+# Install dependencies
 npm i
 
-# Lancer en développement (Exemple minimal)
-npm run dev
-
-# Lancer l'exemple TodoMVC
-npm run dev:todomvc
+# Run the TodoMVC example
+npm run todomvc
 ```
 
 ## Architecture
 
-### Vue d'ensemble
+### Overview
 
-Le framework est organisé en modules indépendants qui travaillent ensemble pour fournir une expérience de développement cohérente.
+The framework is organized into independent modules that work together to provide a cohesive development experience.
 
 ```
 src/
-├── core/           # Cœur du framework
-│   ├── types.ts    # Définitions TypeScript
-│   └── element.ts  # Création d'éléments (div, h1, etc.)
-├── dom/            # Gestion du DOM
-│   └── render.ts   # Virtual DOM et rendu
+├── core/           # Framework core
+│   ├── types.ts    # TypeScript definitions
+│   ├── element.ts  # Element creation (div, h1, etc.)
+│   ├── component.ts # Reactive components
+│   ├── memo.ts     # Memoization and optimization
+│   └── lazy.ts     # Lazy loading and code splitting
+├── dom/            # DOM management
+│   └── render.ts   # Virtual DOM and diffing algorithm
 ├── state/          # State management
-│   └── store.ts    # Store réactif global
-├── events/         # Système d'événements
-│   └── handler.ts  # Délégation globale
+│   └── store.ts    # Global reactive store with batching
+├── events/         # Event system
+│   └── handler.ts  # Global delegation with event pooling
 ├── router/         # Routing
-│   └── hash.ts     # Router basé sur hash URLs
-├── utils/          # Utilitaires
-│   └── id.ts       # Génération d'IDs uniques
-└── index.ts        # Point d'entrée
+│   ├── hash.ts     # Hash-based router
+│   └── lazy.ts     # Lazy router with preloading
+├── utils/          # Utilities
+│   ├── id.ts       # Unique ID generation
+│   ├── equality.ts # Comparison functions
+│   └── pathBuilder.ts # State path builder
+└── index.ts        # Entry point
 ```
 
-### Concepts clés
+### Key Concepts
 
-#### Virtual DOM
-Le framework utilise une représentation virtuelle du DOM pour optimiser les performances :
+#### Virtual DOM with Diffing
+The framework uses a virtual DOM representation with an optimized diffing algorithm:
 ```ts
-// Structure d'un élément virtuel
+// Virtual element structure
 interface VirtualElement {
     tag: string;           // 'div', 'h1', etc.
-    props: ElementProps;   // Attributs et événements
-    children: ElementChild[]; // Enfants (texte ou autres éléments)
+    props: ElementProps;   // Attributes and events
+    children: ElementChild[]; // Children (text or other elements)
+    key?: string;          // Unique key for diffing
 }
 ```
 
-#### Flux de données unidirectionnel
+**Diffing Algorithm**: Only modified elements are re-rendered, not the entire application.
+**Key System**: Elements with the same key are reused instead of being recreated.
+
+#### Unidirectional Data Flow
 ```
-État → Virtual DOM → DOM réel
-  ↑                     ↓
-setState()         Événements utilisateur
+State → Virtual DOM → Diffing → Real DOM
+  ↑                               ↓
+setState()/setBatchedState()  User Events
 ```
 
-#### Contrôle d'inversion
-Contrairement à une librairie où vous appelez les fonctions, le framework prend le contrôle :
-- Librairie : `library.doSomething()`
-- Framework : Le framework appelle vos fonctions de composant automatiquement
+#### Inversion of Control
+Unlike a library where you call functions, the framework takes control:
+- Library: `library.doSomething()`
+- Framework: The framework calls your component functions automatically
 
-### Cycle de vie d'une application
-1. Initialisation : render(app, container)
-2. Création Virtual DOM : Vos fonctions de composant sont appelées
-3. Rendu DOM : Le Virtual DOM est converti en éléments HTML
-4. Événements : Le système de délégation capture les interactions
-5. Changement d'état : setState() déclenche un nouveau cycle
-6. Re-rendu : Seuls les éléments modifiés sont mis à jour
+### Application Lifecycle
+1. Initialization: render(app, container)
+2. Virtual DOM Creation: Your component functions are called
+3. Diffing: Comparison with previous Virtual DOM
+4. DOM Rendering: Only modified elements are updated
+5. Events: The delegation system captures interactions
+6. State Change: setState()/setBatchedState() triggers a new cycle
+7. Optimized Re-render: Diffing algorithm + memoization
 
-### Principes de conception
-- Simplicité : API minimale et intuitive
-- Performance : Virtual DOM et délégation d'événements
-- Réactivité : Mise à jour automatique du DOM
-- Modularité : Chaque fonctionnalité est isolée
-- Type Safety : Support complet de TypeScript
+### Design Principles
+- Simplicity: Minimal and intuitive API
+- Performance: Diffing, memoization, batching, event pooling
+- Reactivity: Automatic DOM updates
+- Modularity: Each feature is isolated
+- Type Safety: Full TypeScript support
+- Optimization: Lazy loading and code splitting
 
-## Démarrage rapide
+## Quick Start
 ```ts
 import { div, h1, button, render, setState, getState } from './src/index';
 
-// Initialiser l'état
+// Initialize state
 setState({ count: 0 });
 
-// Créer une application réactive
+// Create a reactive application
 const app = () => div(
-    h1(`Compteur: ${getState('count')}`),
-    button({ 
-        onClick: () => setState({ count: getState('count') + 1 }) 
-    }, 'Incrémenter')
+    h1(`Counter: ${getState('count')}`),
+    button({
+        onClick: () => setState({ count: getState('count') + 1 })
+    }, 'Increment')
 );
 
-// Rendre l'application
+// Render the application
 render(app, document.getElementById('app')!);
 ```
 
-## API de base
+## Core API
 
-### Création d'éléments♦
-Le framework fournit des fonctions pour créer des éléments HTML de manière déclarative :
+### Element Creation
+The framework provides functions to create HTML elements declaratively:
 ```ts
-// Éléments simples
-div('Contenu texte')
-h1('Titre principal')
-p('Paragraphe')
+// Simple elements
+div('Text content')
+h1('Main title')
+p('Paragraph')
 
-// Avec attributs
-div({ class: 'container', id: 'main' }, 'Contenu')
-input({ type: 'text', placeholder: 'Tapez ici...' })
+// With attributes
+div({ class: 'container', id: 'main' }, 'Content')
+input({ type: 'text', placeholder: 'Type here...' })
 
-// Avec événements
-button({ onClick: () => alert('Cliqué!') }, 'Cliquer')
+// With events
+button({ onClick: () => alert('Clicked!') }, 'Click')
 
-// Éléments imbriqués
+// Nested elements
 div({ class: 'card' },
-    h2('Titre de la carte'),
+    h2('Card title'),
     p('Description'),
     button({ onClick: handleClick }, 'Action')
 )
+
+// With keys for optimization
+div({ key: 'unique-id' }, 'Content')
 ```
 
-### Élements supportés
+### Supported Elements
 ```ts
 div, h1, h2, h3, h4, h5, h6, p, button, input, ul, li, span, label, form, header, footer, section, nav, a, img, strong, table, thead, tbody, tr, th, td, select, option, textarea, br, hr
 ```
 
-### Props avancés
+### Advanced Props
 
-#### Styles en objet
+#### Object Styles
 ```ts
-div({ 
-    style: { 
-        backgroundColor: 'blue', 
+div({
+    style: {
+        backgroundColor: 'blue',
         fontSize: '16px',
-        textAlign: 'center' 
-    } 
-}, 'Texte stylé')
+        textAlign: 'center'
+    }
+}, 'Styled text')
 ```
 
-#### Classes en tableau
+#### Array Classes
 ```ts
-div({ 
-    class: ['btn', 'btn-primary', isActive && 'active'].filter(Boolean) 
-}, 'Bouton')
+div({
+    class: ['btn', 'btn-primary', isActive && 'active'].filter(Boolean)
+}, 'Button')
 ```
 
-#### Attributs booléens
+#### Boolean Attributes
 ```ts
 input({ type: 'checkbox', checked: true, disabled: false })
 ```
 
+#### Keys for Optimization
+```ts
+// Elements with the same key are reused
+ul(
+    todos.map(todo =>
+        li({ key: todo.id }, todo.text)
+    )
+)
+```
 
 ## State Management
 
-La gestion de l'état est réalisé par un Store global, qui stocke les données sous forme de paires clé-valeur, la valeur pouvant être de n'importe quel type.
+State management is handled by a global reactive Store with batching support.
 
-Les fonctions `getState()` et `setState()` sont disponibles pour, respectivement, récupérer les valeurs de l'état et effectuer des modifications dans ledit état :
+### Basic API
 ```ts
-p({ class: 'my-value' }, getState().value)
+import { getState, setState, setBatchedState } from './src/index';
 
-input({
-    placeholder: 'Change the value',
-    onInput: (e: Event) => {
-        setState({ value: (e.target as HTMLInputElement).value })
-    }
-})
+// Initialize state
+setState({ count: 0, user: { name: 'John' } });
+
+// Read state
+const count = getState('count');
+const fullState = getState();
+
+// Modify state (immediate update)
+setState({ count: count + 1 });
+
+// Modify state (batched update)
+// Optimized for bulk operations
+setBatchedState({
+    todos: newTodos,
+    filter: 'all'
+});
 ```
 
-De plus, `setState()` prend en charge la réactivité : un appel à cette fonction déclenchera automatiquement un rechargement de tout élément faisant appel à `getState()`.
+### Update Batching
 
+The framework supports two update modes:
+
+**setState()**: Immediate update
+- Notifies listeners immediately
+- Ideal for quick individual updates
+
+**setBatchedState()**: Batched update
+- Uses `requestAnimationFrame` to group updates
+- Combines multiple changes into a single render
+- **Recommended for**:
+  - Modifying multiple state properties at once
+  - Bulk operations (toggle all, clear completed)
+  - Better performance with large lists
+
+```ts
+// Example: Toggle all todos
+const toggleAll = () => {
+    const newTodos = todos.map(todo => ({
+        ...todo,
+        completed: !todo.completed
+    }));
+
+    // Batching = One re-render instead of one per todo
+    setBatchedState({ todos: newTodos });
+};
+```
+
+### Nested State Paths
+
+The Store supports nested paths:
+```ts
+setState({ user: { profile: { name: 'John', age: 30 } } });
+
+// Access by path
+const name = globalStore.getValueByPath('user.profile.name');
+
+// Subscribe to a specific path
+const unsubscribe = globalStore.subscribeTo('user.profile.name', (newValue) => {
+    console.log('Name changed:', newValue);
+});
+```
+
+### PathBuilder (Type-safe paths)
+```ts
+import { createStatePath } from './src/index';
+
+// Create type-safe paths
+const userPath = createStatePath().user.profile.name;
+const todosPath = createStatePath().todos;
+
+// Subscribe with type safety
+globalStore.subscribeToPath(userPath, (name) => {
+    console.log('Name:', name);
+});
+```
+
+## Reactive Components
+
+Reactive components automatically re-render when state changes.
+
+### ReactiveComponent Class
+```ts
+import { ReactiveComponent, VirtualElement, div, span } from './src/index';
+
+class CounterComponent extends ReactiveComponent {
+    constructor() {
+        super(
+            ['count'],  // State paths to watch
+            () => this.render(),
+            {}  // Initial props
+        );
+    }
+
+    private render(): VirtualElement {
+        const count = getState('count');
+        return div(
+            span(`Count: ${count}`),
+            button({
+                onClick: () => setState({ count: count + 1 })
+            }, 'Increment')
+        );
+    }
+}
+
+// Usage
+const counter = new CounterComponent();
+counter.mount(document.getElementById('counter-container')!);
+```
+
+### Lifecycle Methods
+```ts
+class MyComponent extends ReactiveComponent {
+    mount(container: HTMLElement): void {
+        // Called when component is mounted
+        super.mount(container);
+        console.log('Component mounted');
+    }
+
+    unmount(): void {
+        // Called to cleanup resources
+        console.log('Component unmounting');
+        super.unmount();
+    }
+
+    update(newProps: any): void {
+        // Called to update props
+        super.update(newProps);
+    }
+}
+```
 
 ## Event Handling
 
-Le framework implémente un système d'événements custom basé sur la délégation globale, différent du traditionnel `addEventListener`.
+The framework implements an optimized event system with global delegation and event pooling.
 
-### Principe de fonctionnement
+### How It Works
 
-La délégation globale permet de centraliser les événements et leurs fonctions handlers au sein d'un registre. Le traitement de ces événements est réalisé par un seul et même écouteur, qui exécute les handlers associés à chaque élément qui correspond à la cible de l'événement.
+**Global Delegation**: A single listener on `document` captures all events
+**Event Pooling**: Event object reuse to reduce memory allocation
 
-### Syntaxe des événements
+### Event Syntax
 ```ts
-// Événements supportés (préfixés par 'on')
-button({ onClick: handleClick }, 'Cliquer')
+// Supported events (prefixed with 'on')
+button({ onClick: handleClick }, 'Click')
 input({ onInput: handleInput, onFocus: handleFocus })
 div({ onMouseOver: handleHover })
 ```
 
-### Avantages du système
-- Performance : `addEventListener()` (un écouteur pour CHAQUE élément) vs `dispatchEvent()` (un SEUL listener global sur document) => Optimisation mémoire
-- Flexibilité : Gestion automatique des éléments ajoutés dynamiquement
+### System Advantages
+- **Performance**: One global listener instead of one per element
+- **Memory**: Event pooling reduces allocations
+- **Flexibility**: Automatic handling of dynamic elements
 
 ```ts
-// Exemple avec plusieurs types d'événements
+// Example with multiple event types
 const form = div({ class: 'form' },
     input({
         type: 'text',
-        placeholder: 'Votre nom',
+        placeholder: 'Your name',
         onInput: (e) => setState({ name: e.target.value }),
         onFocus: () => console.log('Input focus'),
         onBlur: () => console.log('Input blur')
@@ -224,223 +370,543 @@ const form = div({ class: 'form' },
         },
         onMouseOver: () => setState({ hovering: true }),
         onMouseOut: () => setState({ hovering: false })
-    }, 'Valider')
+    }, 'Submit')
 );
 ```
 
+## Performance Optimization
+
+The framework offers several optimization techniques.
+
+### Memoization
+
+#### memo() - Memoize Functions
+```ts
+import { memo } from './src/index';
+
+// Memoize a pure function
+const expensiveCalculation = memo((a, b) => {
+    console.log('Computing...');
+    return a * b * 1000;
+});
+
+expensiveCalculation(5, 10); // Computing... 50000
+expensiveCalculation(5, 10); // 50000 (from cache)
+```
+
+#### useCallback() - Memoize Event Handlers
+```ts
+import { useCallback } from './src/index';
+
+class MyComponent extends ReactiveComponent {
+    private handleClick = useCallback((id: string) => {
+        deleteTodo(id);
+    }, []); // Dependencies
+
+    private render() {
+        return button({
+            onClick: () => this.handleClick(todo.id)
+        }, 'Delete');
+    }
+}
+```
+
+#### memoizeReactiveComponent() - Memoize Components
+```ts
+import { memoizeReactiveComponent } from './src/index';
+
+class TodoItem extends ReactiveComponent {
+    constructor(todoId: string) {
+        super(['todos'], () => this.render(todoId), {});
+    }
+    // ...
+}
+
+// Create a memoized version
+const MemoizedTodoItem = memoizeReactiveComponent(
+    TodoItem,
+    (prevArgs, nextArgs) => prevArgs[0] === nextArgs[0]
+);
+
+// Components with the same todoId will be reused
+const item1 = new MemoizedTodoItem('todo-1');
+const item2 = new MemoizedTodoItem('todo-1'); // Reuses item1
+```
+
+### Diffing Algorithm
+
+The diffing algorithm minimizes DOM manipulations:
+
+```ts
+// Before: Full re-render
+// <ul>
+//   <li>Item 1</li>
+//   <li>Item 2</li>
+// </ul>
+
+// After: Only modified element is updated
+// <ul>
+//   <li>Item 1</li>
+//   <li>Item 2 - MODIFIED</li> <- Only this element is re-rendered
+// </ul>
+```
+
+**Use keys** to optimize diffing:
+```ts
+// Without keys: All elements are recreated
+ul(
+    items.map(item => li(item.text))
+)
+
+// With keys: Unchanged elements are reused
+ul(
+    items.map(item => li({ key: item.id }, item.text))
+)
+```
+
+### Equality Functions
+
+```ts
+import { shallowEqual, deepEqual } from './src/index';
+
+// Shallow comparison (references)
+shallowEqual([1, 2], [1, 2]); // false (different arrays)
+shallowEqual(obj1, obj1); // true (same reference)
+
+// Deep comparison (values)
+deepEqual([1, 2], [1, 2]); // true
+deepEqual({ a: 1 }, { a: 1 }); // true
+```
+
+## Lazy Loading
+
+The framework supports lazy loading and code splitting.
+
+### LazyComponent
+
+⚠️ **Important Note on LazyReactiveComponent**:
+The `LazyReactiveComponent` class currently has limitations:
+- Automatically subscribes to `'router.loadingState'` (may not exist)
+- Checks `'user.preferences'` (may not exist)
+- Internal state changes don't trigger re-renders
+- Too complex for components that load instantly
+
+**Recommendation**: Use `ReactiveComponent` directly for simple components. `LazyReactiveComponent` is intended for real async imports (actual code splitting).
+
+### Correct Usage (ReactiveComponent)
+
+```ts
+import { ReactiveComponent } from './src/index';
+
+// Simple and functional reactive component
+class StatsComponent extends ReactiveComponent {
+    constructor() {
+        super(
+            ['todos'],
+            () => this.renderStats(),
+            {}
+        );
+    }
+
+    private renderStats() {
+        const todos = getState('todos');
+        const active = todos.filter(t => !t.completed).length;
+        return span(`${active} items left`);
+    }
+}
+
+const stats = new StatsComponent();
+stats.mount(container);
+```
+
+### LazyComponent (for real code splitting)
+
+```ts
+import { LazyComponent } from './src/index';
+
+// Lazy loading with real dynamic import
+const lazyModule = new LazyComponent(
+    () => import('./heavy-component').then(m => m.default),
+    {
+        fallback: { tag: 'div', props: {}, children: ['Loading...'] },
+        onError: { tag: 'div', props: {}, children: ['Error loading'] }
+    }
+);
+
+// Load and render
+await lazyModule.load();
+const element = lazyModule.render(props);
+```
 
 ## Routing
 
-Le framework inclut un système de routing simple basé sur les hash URLs pour créer des applications single-page.
+The framework includes an advanced routing system with lazy loading.
 
-### Configuration des routes
+### Basic Hash Router
+
 ```ts
 import { registerRoute, initRouter, navigateTo } from './src/index';
 
-// Enregistrer des routes
-registerRoute('', () => div('Page d'accueil'));
-registerRoute('about', () => div('À propos'));
+// Register routes
+registerRoute('', () => div('Home page'));
+registerRoute('about', () => div('About'));
 registerRoute('contact', () => div('Contact'));
 
-// Initialiser le router
-initRouter(); // Le router cherche automatiquement #router-outlet
+// Initialize the router
+initRouter(); // Automatically looks for #router-outlet
 ```
 
-### Fonctionnement
+### Lazy Router
 
-Le router utilise les **hash URLs** (`#/route`) pour détecter les changements de navigation :
-- `#/` ou `#` → route vide (`''`)
-- `#/about` → route `'about'`
-- `#/contact` → route `'contact'`
+The lazy router supports deferred route loading:
 
-Le framework écoute l'événement `hashchange` pour détecter automatiquement les changements d'URL.
+```ts
+import { registerLazyRoute, navigateToLazy, preloadRoute } from './src/index';
+
+// Register lazy routes
+registerLazyRoute('/',
+    () => Promise.resolve(() => div('Home')),
+    { preload: true }
+);
+
+registerLazyRoute('/dashboard',
+    () => import('./views/dashboard').then(m => m.default),
+    { preload: false }
+);
+
+// Lazy navigation
+await navigateToLazy('/dashboard');
+
+// Manual preload
+await preloadRoute('/dashboard');
+```
+
+### Preloading Strategies
+
+The framework offers three preloading strategies:
+
+#### 1. Hover Preloading
+```ts
+import { enableHoverPreloading } from './src/index';
+
+// Preload when user hovers over a link
+enableHoverPreloading();
+// Routes load as soon as the user hovers over links
+```
+
+#### 2. Visible Preloading
+```ts
+import { enableVisiblePreloading } from './src/index';
+
+// Preload when links become visible
+enableVisiblePreloading();
+// Uses IntersectionObserver to detect visibility
+```
+
+#### 3. Idle Preloading
+```ts
+import { enableIdlePreloading } from './src/index';
+
+// Preload during browser idle time
+enableIdlePreloading();
+// Uses requestIdleCallback to load routes in the background
+```
+
+### Combining Strategies
+
+```ts
+// Optimal configuration
+registerLazyRoute('/', homeLoader, { preload: true });  // Main route
+registerLazyRoute('/about', aboutLoader, { preload: false });
+registerLazyRoute('/contact', contactLoader, { preload: false });
+
+// Preload the initial route
+preloadRoute(window.location.hash.slice(1) || '/');
+
+// Enable hover + idle preloading
+enableHoverPreloading();  // Preload on hover
+enableIdlePreloading();   // Preload the rest during idle time
+```
 
 ### Navigation
-```ts
-// Navigation programmatique
-navigateTo('about'); // Va vers #/about
-navigateTo('');      // Va vers #/ (accueil)
 
-// Navigation via liens
-a({ href: '#/about', onClick: (e) => {
-    e.preventDefault();
-    navigateTo('about');
-}}, 'À propos')
-```
-```html
-<div id="app">
-    <!-- Navigation -->
-    <nav>
-        <button onclick="navigateTo('')">Accueil</button>
-        <button onclick="navigateTo('about')">À propos</button>
-    </nav>
-    
-    <!-- Container pour les routes -->
-    <div id="router-outlet"></div>
-</div>
+```ts
+// Programmatic navigation
+navigateTo('about'); // Synchronous
+await navigateToLazy('/dashboard'); // Asynchronous with lazy loading
+
+// Navigation via links
+a({
+    href: '#/about',
+    onClick: (e) => {
+        e.preventDefault();
+        navigateToLazy('/about');
+    }
+}, 'About')
 ```
 
-### Intégration avec le State Management
+### Integration with State Management
+
 ```ts
-// Les composants de route peuvent utiliser le state
-registerRoute('counter', () => {
+// Route components can use state
+registerLazyRoute('/counter', () => Promise.resolve(() => {
     const count = getState('count') || 0;
     return div(
-        h1(`Compteur: ${count}`),
-        button({ 
-            onClick: () => setState({ count: count + 1 }) 
+        h1(`Counter: ${count}`),
+        button({
+            onClick: () => setState({ count: count + 1 })
         }, '+1')
     );
-});
-```
-**Note importante** : Les routes sont automatiquement re-rendues lors des changements d'état grâce à la réactivité du framework.
-
-### Routes non trouvées
-
-Si l'utilisateur navigue vers une route non enregistrée, le framework affiche automatiquement :
-```html
-<p>404 - Not Found</p>
+}));
 ```
 
+## Examples
 
-## Exemples
-### Exemple 1 : Compteur simple
+### Example 1: Counter with Memoization
 ```ts
-import { div, h1, button, render, setState, getState } from './src/index';
+import { div, h1, button, render, setState, getState, useCallback } from './src/index';
 
-// État initial
+// Initial state
 setState({ count: 0 });
+
+// Memoized event handlers
+const increment = useCallback(() =>
+    setState({ count: getState('count') + 1 }),
+[]);
+
+const decrement = useCallback(() =>
+    setState({ count: getState('count') - 1 }),
+[]);
+
+const reset = useCallback(() =>
+    setState({ count: 0 }),
+[]);
 
 // Application
 const counterApp = () => div(
-    h1(`Compteur: ${getState('count')}`),
+    h1(`Counter: ${getState('count')}`),
     div(
-        button({ onClick: () => setState({ count: getState('count') - 1 }) }, '-'),
-        button({ onClick: () => setState({ count: getState('count') + 1 }) }, '+'),
-        button({ onClick: () => setState({ count: 0 }) }, 'Reset')
+        button({ onClick: decrement }, '-'),
+        button({ onClick: increment }, '+'),
+        button({ onClick: reset }, 'Reset')
     )
 );
 
 render(counterApp, document.getElementById('app')!);
 ```
 
-### Exemple 2 : Formulaire avec validation
+### Example 2: Optimized List with Keys
 ```ts
-// État du formulaire
-setState({
-    name: '',
-    email: '',
-    errors: {}
-});
+import { div, ul, li, button, setState, getState, generateId } from './src/index';
 
-const validateForm = () => {
-    const { name, email } = getState();
-    const errors = {};
-    
-    if (!name.trim()) errors.name = 'Le nom est requis';
-    if (!email.includes('@')) errors.email = 'Email invalide';
-    
-    setState({ errors });
-    return Object.keys(errors).length === 0;
+setState({ todos: [] });
+
+const addTodo = (text) => {
+    const todos = getState('todos');
+    setState({
+        todos: [...todos, { id: generateId(), text, completed: false }]
+    });
 };
 
-const formApp = () => {
-    const { name, email, errors } = getState();
-    
-    return div({ class: 'form' },
-        h2('Inscription'),
-        
-        div(
-            input({
-                type: 'text',
-                placeholder: 'Nom',
-                value: name,
-                onInput: (e) => setState({ name: e.target.value })
-            }),
-            errors.name && span({ class: 'error' }, errors.name)
-        ),
-        
-        div(
-            input({
-                type: 'email',
-                placeholder: 'Email',
-                value: email,
-                onInput: (e) => setState({ email: e.target.value })
-            }),
-            errors.email && span({ class: 'error' }, errors.email)
-        ),
-        
-        button({
-            onClick: () => {
-                if (validateForm()) {
-                    alert('Formulaire valide !');
-                }
-            }
-        }, 'Valider')
+const removeTodo = (id) => {
+    const todos = getState('todos');
+    setState({
+        todos: todos.filter(t => t.id !== id)
+    });
+};
+
+const todoApp = () => {
+    const todos = getState('todos');
+
+    return div(
+        button({ onClick: () => addTodo('New todo') }, 'Add Todo'),
+        ul(
+            // Use keys to optimize diffing
+            ...todos.map(todo =>
+                li({ key: todo.id },
+                    todo.text,
+                    button({
+                        onClick: () => removeTodo(todo.id)
+                    }, 'Delete')
+                )
+            )
+        )
     );
 };
 ```
 
-### Exemple 3 : Application avec routing
+### Example 3: Application with Lazy Routing
 ```ts
-// Configuration des routes
-registerRoute('', () => div(
-    h1('Accueil'),
-    p('Bienvenue sur notre site !')
-));
+import {
+    registerLazyRoute,
+    navigateToLazy,
+    enableHoverPreloading,
+    enableIdlePreloading
+} from './src/index';
 
-registerRoute('products', () => {
-    const products = getState('products') || [];
-    return div(
-        h1('Nos produits'),
-        ul(...products.map(product => 
-            li(product.name + ' - ' + product.price + '€')
-        ))
-    );
-});
+// Lazy routes
+registerLazyRoute('/',
+    () => Promise.resolve(() => div(h1('Home'), p('Welcome!'))),
+    { preload: true }
+);
 
-registerRoute('contact', () => div(
-    h1('Contact'),
-    p('Email: contact@example.com')
-));
+registerLazyRoute('/products',
+    () => Promise.resolve(() => {
+        const products = getState('products') || [];
+        return div(
+            h1('Products'),
+            ul(...products.map(p => li(p.name)))
+        );
+    }),
+    { preload: false }
+);
 
-// Application principale
+// Enable preloading strategies
+enableHoverPreloading();
+enableIdlePreloading();
+
+// Navigation
 const app = () => div(
-    div({ class: 'nav' },
-        button({ onClick: () => navigateTo('') }, 'Accueil'),
-        button({ onClick: () => navigateTo('products') }, 'Produits'),
-        button({ onClick: () => navigateTo('contact') }, 'Contact')
+    nav(
+        a({
+            href: '#/',
+            onClick: (e) => { e.preventDefault(); navigateToLazy('/'); }
+        }, 'Home'),
+        a({
+            href: '#/products',
+            onClick: (e) => { e.preventDefault(); navigateToLazy('/products'); }
+        }, 'Products')
     ),
     div({ id: 'router-outlet' })
 );
-
-// Initialisation
-setState({ products: [
-    { name: 'Produit 1', price: 29.99 },
-    { name: 'Produit 2', price: 39.99 }
-]});
-
-render(app, document.getElementById('app')!);
-initRouter();
 ```
 
-### TodoMVC - Exemple complet
+### Example 4: Reactive Component with Batching
+```ts
+import { ReactiveComponent, setBatchedState } from './src/index';
 
-L'implémentation complète de TodoMVC est disponible dans `examples/todomvc/` et démontre :
+class TodoListComponent extends ReactiveComponent {
+    constructor() {
+        super(['todos', 'filter'], () => this.render(), {});
+    }
 
-- Gestion d'état complexe avec tableaux d'objets
-- Événements multiples (click, input, keyup, dblclick)
-- Filtrage et manipulation de données
-- Édition inline avec gestion du focus
-- Router simple pour les filtres
-- Interface utilisateur complète et fonctionnelle
+    private toggleAll() {
+        const todos = getState('todos');
+        const allCompleted = todos.every(t => t.completed);
 
-Pour lancer l'exemple :
+        // Batching: One re-render for all changes
+        setBatchedState({
+            todos: todos.map(t => ({ ...t, completed: !allCompleted }))
+        });
+    }
+
+    private render() {
+        const todos = getState('todos');
+        const filter = getState('filter');
+
+        const filtered = todos.filter(t => {
+            if (filter === 'active') return !t.completed;
+            if (filter === 'completed') return t.completed;
+            return true;
+        });
+
+        return div(
+            button({ onClick: () => this.toggleAll() }, 'Toggle All'),
+            ul(
+                ...filtered.map(todo =>
+                    li({ key: todo.id }, todo.text)
+                )
+            )
+        );
+    }
+}
+```
+
+### TodoMVC - Complete Example
+
+The complete TodoMVC implementation in `examples/todomvc/` demonstrates:
+
+**Basic Features**:
+- Complex state management with object arrays
+- Multiple events (click, input, keyup, dblclick)
+- Data filtering and manipulation
+- Inline editing with focus management
+
+**Advanced Optimizations**:
+- ✅ **Memoization**: `memoizeReactiveComponent` for TodoItems
+- ✅ **useCallback**: Memoized event handlers
+- ✅ **Batched Updates**: `setBatchedState` for toggle all and clear completed
+- ✅ **Reactive Components**: Self-updating components for stats, filters, toggle-all
+- ✅ **Lazy Router**: Lazy routes for filters with preloading
+- ✅ **Preloading Strategies**: Hover and idle preloading enabled
+- ✅ **Diffing Algorithm**: Keys on all list elements
+- ✅ **Event Pooling**: Optimized global delegation system
+
+**Maintained Class Structure**:
+- `TodoItemComponent`: Reactive component for each todo
+- `TodoListManager`: Manages the todo list
+- `TodoAppManager`: Main application manager
+
+To run the example:
 ```bash
-npm run dev:todomvc
+npm run todomvc
 ```
 
-### Ressources
-- Spécification TodoMVC : todomvc.com
-- CSS TodoMVC : Inclus automatiquement dans l'exemple
-- Tests : Testez toutes les fonctionnalités dans l'exemple TodoMVC
+### Resources
+- TodoMVC Specification: todomvc.com
+- TodoMVC CSS: Automatically included in the example
+- Tests: Test all features in the TodoMVC example
+
+## Performance Tips
+
+### ✅ Do
+- Use `setBatchedState()` for bulk operations
+- Add `key` to list elements
+- Memoize reactive components with `memoizeReactiveComponent()`
+- Memoize event handlers with `useCallback()`
+- Use `ReactiveComponent` for stateful components
+- Enable preloading strategies for routing
+
+### ❌ Don't
+- Modify state in loops without batching
+- Forget `key` on dynamic lists
+- Recreate event handlers on every render
+- Use `LazyReactiveComponent` for simple components
+- Load all routes immediately
+
+## API Reference Summary
+
+### Core
+- `div, h1, ..., button, input`: Element creation
+- `render(component, container)`: Initial render
+
+### State
+- `getState(key?)`: Read state
+- `setState(updates)`: Immediate update
+- `setBatchedState(updates)`: Batched update
+- `globalStore`: Global store instance
+
+### Components
+- `ReactiveComponent`: Base class for reactive components
+- `memoizeReactiveComponent(Class, compareFn)`: Memoize a component
+
+### Performance
+- `memo(fn, compareFn?)`: Memoize a function
+- `useCallback(fn, deps)`: Memoize an event handler
+- `shallowEqual(a, b)`: Shallow comparison
+- `deepEqual(a, b)`: Deep comparison
+
+### Routing
+- `registerRoute(path, component)`: Standard route
+- `registerLazyRoute(path, loader, options)`: Lazy route
+- `navigateTo(path)`: Synchronous navigation
+- `navigateToLazy(path)`: Asynchronous navigation
+- `preloadRoute(path)`: Manual preload
+- `enableHoverPreloading()`: Hover preload
+- `enableVisiblePreloading()`: Visibility preload
+- `enableIdlePreloading()`: Idle time preload
+- `initRouter()`: Initialize the router
+
+### Utils
+- `generateId()`: Generate a unique ID
+- `createStatePath()`: Type-safe path builder

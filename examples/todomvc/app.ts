@@ -3,7 +3,6 @@ import {
     ReactiveComponent,
 
     div,
-    h1,
     a,
     input,
     ul,
@@ -16,11 +15,18 @@ import {
 
     globalStore,
     setState,
+    setBatchedState,
     getState,
 
-    generateId
+    generateId,
+    memoizeReactiveComponent,
+    useCallback,
+    registerLazyRoute,
+    navigateToLazy,
+    preloadRoute,
+    enableHoverPreloading,
+    enableIdlePreloading
 } from '../../src/index';
-import { createStatePath } from '../../src/state/store';
 
 // ------------- Types pour TodoMVC -------------
 
@@ -53,59 +59,41 @@ setState<TodoState>({
 
 // Composant TodoItem réactif
 class TodoItemComponent extends ReactiveComponent {
+    private todoId: string;
+
     constructor(todoId: string) {
         const todos = getCurrentState().todos;
         const todoIndex = todos.findIndex(t => t.id === todoId);
 
-        if (todoIndex === -1) {
-            super(
-                [`todos`],
-                (props) => this.renderTodo(props),
-                { todoId },
-                (newValue: any, oldValue: any, path: string) => {
-                    if (!oldValue) return true; // Premier rendu
+        // Determine paths and call super first
+        const paths = todoIndex === -1 ? [`todos`] : [
+            `todos[${todoIndex}].text`,
+            `todos[${todoIndex}].completed`,
+            'editingId'
+        ];
 
-                    // Si le chemin est 'todos', on a la liste complète
-                    if (path === 'todos') {
-                        const newTodos = newValue as Todo[];
-                        const oldTodos = oldValue as Todo[];
-                        const newTodo = newTodos?.find(t => t.id === todoId);
-                        const oldTodo = oldTodos?.find(t => t.id === todoId);
-                        return !todoEqual(newTodo, oldTodo);
-                    }
+        super(
+            paths,
+            (props) => this.renderTodo(props),
+            { todoId },
+            (newValue: any, oldValue: any, path: string) => {
+                if (!oldValue) return true; // Premier rendu
 
-                    // Pour les autres chemins, comparer directement les valeurs
-                    return newValue !== oldValue;
+                // Si le chemin est 'todos', on a la liste complète
+                if (path === 'todos') {
+                    const newTodos = newValue as Todo[];
+                    const oldTodos = oldValue as Todo[];
+                    const newTodo = newTodos?.find(t => t.id === todoId);
+                    const oldTodo = oldTodos?.find(t => t.id === todoId);
+                    return !todoEqual(newTodo, oldTodo);
                 }
-            );
-        } else {
-            const paths = [
-                `todos[${todoIndex}].text`,
-                `todos[${todoIndex}].completed`,
-                'editingId'
-            ];
 
-            super(
-                paths,
-                (props) => this.renderTodo(props),
-                { todoId },
-                (newValue: any, oldValue: any, path: string) => {
-                    if (!oldValue) return true; // Premier rendu
+                // Pour les autres chemins, comparer directement les valeurs
+                return newValue !== oldValue;
+            }
+        );
 
-                    // Si le chemin est 'todos', on a la liste complète
-                    if (path === 'todos') {
-                        const newTodos = newValue as Todo[];
-                        const oldTodos = oldValue as Todo[];
-                        const newTodo = newTodos?.find(t => t.id === todoId);
-                        const oldTodo = oldTodos?.find(t => t.id === todoId);
-                        return !todoEqual(newTodo, oldTodo);
-                    }
-
-                    // Pour les autres chemins, comparer directement les valeurs
-                    return newValue !== oldValue;
-                }
-            );
-        }
+        this.todoId = todoId;
 
         this.equals = (oldTodos: Todo[], newTodos: Todo[]) => {
             const oldTodo = oldTodos?.find(t => t.id === todoId);
@@ -115,64 +103,287 @@ class TodoItemComponent extends ReactiveComponent {
         };
     }
 
+    // Memoized event handlers
+    private handleBlur = useCallback((e: Event, id: string) => {
+        saveEdit(id, (e.target as HTMLInputElement).value);
+    }, []);
+
+    private handleKeyUp = useCallback((e: KeyboardEvent, id: string) => {
+        if (e.key === 'Enter') {
+            saveEdit(id, (e.target as HTMLInputElement).value);
+        } else if (e.key === 'Escape') {
+            cancelEdit();
+        }
+    }, []);
+
+    private handleToggle = useCallback((id: string) => {
+        toggleTodo(id);
+    }, []);
+
+    private handleStartEdit = useCallback((id: string) => {
+        startEditing(id);
+    }, []);
+
+    private handleDelete = useCallback((id: string) => {
+        deleteTodo(id);
+    }, []);
+
     private renderTodo(props: { todoId: string }): VirtualElement {
         const state = getCurrentState();
         const todo = state.todos.find(t => t.id === props.todoId);
         
         if (!todo) {
-            console.log(`Todo ${props.todoId} not found, rendering empty`);
             return div(); // Todo supprimée
         }
         
-        console.log(`Rendering TodoItem ${todo.id}`);
         const isEditing = state.editingId === todo.id;
 
         if (isEditing) {
-            return li({ 
+            return li({
                 key: todo.id,
-                class: ['completed', 'editing'].filter(cls => 
+                class: ['completed', 'editing'].filter(cls =>
                     (cls === 'completed' && todo.completed) || cls === 'editing'
-                ) 
+                )
             },
                 input({
                     class: 'edit',
                     value: todo.text,
                     autofocus: true,
-                    onBlur: (e: Event) => {
-                        saveEdit(todo.id, (e.target as HTMLInputElement).value);
-                    },
-                    onKeyUp: (e: KeyboardEvent) => {
-                        if (e.key === 'Enter') {
-                            saveEdit(todo.id, (e.target as HTMLInputElement).value);
-                        } else if (e.key === 'Escape') {
-                            cancelEdit();
-                        }
-                    }
+                    onBlur: (e: Event) => this.handleBlur(e, todo.id),
+                    onKeyUp: (e: KeyboardEvent) => this.handleKeyUp(e, todo.id)
                 })
             );
         }
 
-        return li({ 
-            key: todo.id, 
-            class: todo.completed ? 'completed' : '' 
+        return li({
+            key: todo.id,
+            class: todo.completed ? 'completed' : ''
         },
             div({ class: 'view' },
                 input({
                     class: 'toggle',
                     type: 'checkbox',
                     checked: todo.completed,
-                    onChange: () => toggleTodo(todo.id)
+                    onChange: () => this.handleToggle(todo.id)
                 }),
                 label({
-                    onDblClick: () => startEditing(todo.id)
+                    onDblClick: () => this.handleStartEdit(todo.id)
                 }, todo.text),
                 button({
                     class: 'destroy',
-                    onClick: () => deleteTodo(todo.id)
+                    onClick: () => this.handleDelete(todo.id)
                 })
             )
         );
     }
+}
+
+// Memoized version of TodoItemComponent for better performance
+const MemoizedTodoItemComponent = memoizeReactiveComponent(
+    TodoItemComponent,
+    (prevArgs, nextArgs) => {
+        // Only recreate if todoId changes
+        return prevArgs[0] === nextArgs[0];
+    }
+);
+
+// -----------------------------------------------
+// Reactive Components for Toggle-All and Footer
+// -----------------------------------------------
+
+// Toggle-All Reactive Component
+class ToggleAllComponent extends ReactiveComponent {
+    constructor() {
+        super(
+            ['todos'],
+            () => this.renderToggleAll(),
+            {}
+        );
+    }
+
+    private renderToggleAll(): VirtualElement {
+        const state = getCurrentState();
+
+        if (state.todos.length === 0) {
+            return div(); // Empty when no todos
+        }
+
+        const allCompleted = state.todos.every(todo => todo.completed);
+
+        return div(
+            input({
+                id: 'toggle-all',
+                class: 'toggle-all',
+                type: 'checkbox',
+                checked: allCompleted,
+                onChange: () => {
+                    const visibleTodos = getFilteredTodos(state);
+                    const allVisibleCompleted = visibleTodos.length > 0 && visibleTodos.every(todo => todo.completed);
+                    const newCompletedState = !allVisibleCompleted;
+
+                    const newTodos = state.todos.map(todo => ({ ...todo, completed: newCompletedState }));
+                    updateBatchedState({ todos: newTodos });
+                }
+            }),
+            label({ for: 'toggle-all' }, 'Mark all as complete')
+        );
+    }
+}
+
+// Stats Reactive Component
+class StatsComponent extends ReactiveComponent {
+    constructor() {
+        super(
+            ['todos'],
+            () => this.renderStats(),
+            {}
+        );
+    }
+
+    private renderStats(): VirtualElement {
+        const state = getCurrentState();
+        const activeTodoCount = state.todos.filter(todo => !todo.completed).length;
+
+        return span({ class: 'todo-count' },
+            `${activeTodoCount} item${activeTodoCount !== 1 ? 's' : ''} left`
+        );
+    }
+}
+
+// Filters Reactive Component
+class FiltersComponent extends ReactiveComponent {
+    constructor() {
+        super(
+            ['filter'],
+            () => this.renderFilters(),
+            {}
+        );
+    }
+
+    private renderFilters(): VirtualElement {
+        const state = getCurrentState();
+
+        return ul({ class: 'filters' },
+            li(a({
+                href: '#/',
+                class: state.filter === 'all' ? 'selected' : '',
+                onClick: (e: Event) => {
+                    e.preventDefault();
+                    navigateToLazy('/').catch(console.error);
+                }
+            }, 'All')),
+            li(a({
+                href: '#/active',
+                class: state.filter === 'active' ? 'selected' : '',
+                onClick: (e: Event) => {
+                    e.preventDefault();
+                    navigateToLazy('/active').catch(console.error);
+                }
+            }, 'Active')),
+            li(a({
+                href: '#/completed',
+                class: state.filter === 'completed' ? 'selected' : '',
+                onClick: (e: Event) => {
+                    e.preventDefault();
+                    navigateToLazy('/completed').catch(console.error);
+                }
+            }, 'Completed'))
+        );
+    }
+}
+
+// Clear Completed Reactive Component
+class ClearCompletedComponent extends ReactiveComponent {
+    constructor() {
+        super(
+            ['todos'],
+            () => this.renderClearCompleted(),
+            {}
+        );
+    }
+
+    private renderClearCompleted(): VirtualElement {
+        const state = getCurrentState();
+        const completedTodoCount = state.todos.filter(todo => todo.completed).length;
+
+        if (completedTodoCount === 0) {
+            return span(); // Empty when no completed todos
+        }
+
+        return button({
+            class: 'clear-completed',
+            onClick: () => clearCompleted()
+        }, 'Clear completed');
+    }
+}
+
+// Create component instances
+const toggleAllComponent = new ToggleAllComponent();
+const statsComponent = new StatsComponent();
+const filtersComponent = new FiltersComponent();
+const clearCompletedComponent = new ClearCompletedComponent();
+
+// -----------------------------------------------
+// Lazy Router Setup
+// -----------------------------------------------
+
+// Lazy route components for filters
+const allFilterLoader = () => Promise.resolve(() => {
+    setFilter('all');
+    return div(); // Return empty element, state update is the important part
+});
+
+const activeFilterLoader = () => Promise.resolve(() => {
+    setFilter('active');
+    return div();
+});
+
+const completedFilterLoader = () => Promise.resolve(() => {
+    setFilter('completed');
+    return div();
+});
+
+// Register lazy routes for filters (without immediate preload)
+registerLazyRoute('/', allFilterLoader, { preload: false });
+registerLazyRoute('/active', activeFilterLoader, { preload: false });
+registerLazyRoute('/completed', completedFilterLoader, { preload: false });
+
+// Preload the initial route immediately (current filter)
+const initialHash = window.location.hash.slice(1) || '/';
+preloadRoute(initialHash).catch(console.error);
+
+// Initialize hash router to sync URL with filter state
+function initFilterRouter(): void {
+    // Handle hash changes
+    const handleHashChange = () => {
+        const hash = window.location.hash.slice(1) || '/';
+        const filterMap: Record<string, Filter> = {
+            '/': 'all',
+            '/active': 'active',
+            '/completed': 'completed'
+        };
+
+        const newFilter = filterMap[hash];
+        if (newFilter && getCurrentState().filter !== newFilter) {
+            setFilter(newFilter);
+        }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+
+    // Set initial filter from URL
+    handleHashChange();
+}
+
+// Initialize preloading strategies
+function initPreloadingStrategies(): void {
+    // Strategy 1: Hover Preloading
+    // Preload routes when user hovers over filter links
+    enableHoverPreloading();
+
+    // Strategy 2: Idle Preloading
+    // Preload remaining routes during browser idle time
+    enableIdlePreloading();
 }
 
 // Gestionnaire de la liste des todos
@@ -228,8 +439,8 @@ class TodoListManager {
                 const container = document.createElement('div');
                 container.setAttribute('data-todo-id', todo.id);
                 this.listContainer.appendChild(container);
-                
-                const component = new TodoItemComponent(todo.id);
+
+                const component = new MemoizedTodoItemComponent(todo.id);
                 component.mount(container);
                 this.todoComponents.set(todo.id, component);
             }
@@ -249,73 +460,59 @@ class TodoListManager {
 class TodoAppManager {
     private listManager: TodoListManager | null = null;
     private footerUnsubscribe: (() => void) | null = null;
-    
+    private lazyComponentsMounted: boolean = false;
+
+    // Memoized event handlers
+    private handleNewTodoKeyUp = useCallback((e: KeyboardEvent) => {
+        if (e.key !== 'Enter' || !(e.target instanceof HTMLInputElement)) return;
+
+        const input = e.target as HTMLInputElement;
+        const text = input.value.trim();
+
+        if (text.length > 0) {
+            addTodo(text);
+        }
+
+        input.value = '';
+    }, []);
+
     constructor(private container: HTMLElement) {}
     
     // Initialiser l'application complète
     initialize(): void {
         this.createStaticStructure();
-    
+
         const listContainer = document.getElementById('todo-list-container')!;
         this.listManager = new TodoListManager(listContainer);
-        
-        // S'abonner aux changements pour mettre à jour footer et toggle-all
+
+        // Mount lazy components
+        this.mountLazyComponents();
+
+        // S'abonner aux changements pour mettre à jour la visibilité
         this.footerUnsubscribe = globalStore.subscribeTo('todos', () => {
-            this.updateFooter();
-            this.updateToggleAllState();
+            this.updateMainVisibility();
+            this.updateFooterVisibility();
         });
 
-        const filterUnsubscribe = globalStore.subscribeTo('filter', () => {
-            this.updateFooter();
-        });
-
-        // Stocker les deux unsubscribe
-        this.footerUnsubscribe = () => {
-            if (this.footerUnsubscribe) this.footerUnsubscribe();
-            if (filterUnsubscribe) filterUnsubscribe();
-        };
-        
         // Mise à jour initiale
-        this.updateFooter();
-        this.updateToggleAllState();
+        this.updateMainVisibility();
+        this.updateFooterVisibility();
     }
 
-    // Créer les éléments interactifs (input, toggle-all)
+    // Créer les éléments interactifs (input principal uniquement)
     private createInteractiveElements(): void {
-        console.log('Creating interactive elements...');
-    
         // Input principal
         const newTodoContainer = document.getElementById('new-todo-container')!;
-        console.log('newTodoContainer found:', newTodoContainer);
-        
+
         const newTodoInput = input({
             class: 'new-todo',
             placeholder: 'What needs to be done?',
             autofocus: true,
             onKeyUp: (e: KeyboardEvent) => {
-                console.log('KeyUp event triggered');
-                this.handleNewTodoInput(e);
+                this.handleNewTodoKeyUp(e);
             }
         });
         newTodoContainer.appendChild(createElement(newTodoInput));
-        
-        // Toggle all
-        const toggleContainer = document.getElementById('toggle-all-container')!;
-        console.log('toggleContainer found:', toggleContainer);
-        
-        const toggleAllElements = div(
-            input({
-                id: 'toggle-all',
-                class: 'toggle-all',
-                type: 'checkbox',
-                onChange: () => {
-                    console.log('Toggle all clicked');
-                    this.handleToggleAll();
-                }
-            }),
-            label({ for: 'toggle-all' }, 'Mark all as complete')
-        );
-        toggleContainer.appendChild(createElement(toggleAllElements));
     }
 
 
@@ -330,113 +527,54 @@ class TodoAppManager {
                 <div id="toggle-all-container"></div>
                 <ul class="todo-list" id="todo-list-container"></ul>
             </div>
-            <div class="footer" id="footer-container"></div>
+            <div class="footer" id="footer-container">
+                <div id="stats-container"></div>
+                <div id="filters-container"></div>
+                <div id="clear-completed-container"></div>
+            </div>
         `;
-        
+
         this.createInteractiveElements();
     }
-    
-    // Mettre à jour l'état du toggle-all
-    private updateToggleAllState(): void {
-        const toggleAllCheckbox = this.container.querySelector('#toggle-all') as HTMLInputElement;
-        const visibleTodos = getFilteredTodos();
-        
-        if (visibleTodos.length === 0) {
-            toggleAllCheckbox.style.display = 'none';
-        } else {
-            toggleAllCheckbox.style.display = 'block';
-            toggleAllCheckbox.checked = visibleTodos.every(todo => todo.completed);
-        }
-    }
 
-    // Gérer l'ajout d'une nouvelle todo via l'input principal
-    private handleNewTodoInput(event: KeyboardEvent): void {
-        if (event.key !== 'Enter' || !(event.target instanceof HTMLInputElement)) return;
-        
-        const input = event.target as HTMLInputElement;
-        const text = input.value.trim();
+    // Mount reactive components
+    private mountLazyComponents(): void {
+        const toggleAllContainer = document.getElementById('toggle-all-container')!;
+        const statsContainer = document.getElementById('stats-container')!;
+        const filtersContainer = document.getElementById('filters-container')!;
+        const clearCompletedContainer = document.getElementById('clear-completed-container')!;
 
-        if (text.length > 0) {
-            addTodo(text);
-        }
+        toggleAllComponent.mount(toggleAllContainer);
+        statsComponent.mount(statsContainer);
+        filtersComponent.mount(filtersContainer);
+        clearCompletedComponent.mount(clearCompletedContainer);
 
-        input.value = '';
+        this.lazyComponentsMounted = true;
     }
     
-    // Gérer le toggle-all
-    private handleToggleAll(): void {
+    // Mettre à jour la visibilité de la section principale
+    private updateMainVisibility(): void {
         const state = getCurrentState();
-        const visibleTodos = getFilteredTodos(state);
-        
-        const allVisibleCompleted = visibleTodos.length > 0 && visibleTodos.every(todo => todo.completed);
-        const newCompletedState = !allVisibleCompleted;
-        
-        console.log('All visible completed:', allVisibleCompleted, 'New state:', newCompletedState);
-        
-        const newTodos = state.todos.map(todo => {
-            return { ...todo, completed: newCompletedState };
-        });
-        
-        updateState({ todos: newTodos });
+        const mainSection = this.container.querySelector('.main') as HTMLElement;
+
+        if (state.todos.length === 0) {
+            mainSection.style.display = 'none';
+        } else {
+            mainSection.style.display = 'block';
+        }
     }
-    
-    // Mettre à jour le footer (compteur + filtres + clear)
-    private updateFooter(): void {
+
+    // Mettre à jour la visibilité du footer
+    // Les lazy components gèrent leur propre contenu
+    private updateFooterVisibility(): void {
         const state = getCurrentState();
         const footerContainer = document.getElementById('footer-container') as HTMLElement;
 
         if (state.todos.length === 0) {
-            footerContainer.innerHTML = '';
-            return;
+            footerContainer.style.display = 'none';
+        } else {
+            footerContainer.style.display = 'block';
         }
-
-        const activeTodoCount = state.todos.filter(todo => !todo.completed).length;
-        const completedTodoCount = state.todos.length - activeTodoCount;
-        
-        const footerContent = div(
-            span({ class: 'todo-count' },
-                `${activeTodoCount} item${activeTodoCount !== 1 ? 's' : ''} left`
-            ),
-            ul({ class: 'filters' },
-                li(a({ 
-                    href: '#/', 
-                    class: state.filter === 'all' ? 'selected' : '',
-                    onClick: (e: Event) => {
-                        console.log('All filter clicked');
-                        e.preventDefault();
-                        setFilter('all' as Filter);
-                    }
-                }, 'All')),
-                li(a({ 
-                    href: '#/active', 
-                    class: state.filter === 'active' ? 'selected' : '',
-                    onClick: (e: Event) => {
-                        console.log('Active filter clicked');
-                        e.preventDefault();
-                        setFilter('active' as Filter);
-                    }
-                }, 'Active')),
-                li(a({ 
-                    href: '#/completed', 
-                    class: state.filter === 'completed' ? 'selected' : '',
-                    onClick: (e: Event) => {
-                        console.log('Completed filter clicked');
-                        e.preventDefault();
-                        setFilter('completed' as Filter);
-                    }
-                }, 'Completed'))
-            ),
-            completedTodoCount > 0 ? button({
-                class: 'clear-completed',
-                onClick: () => {
-                    console.log('Clear completed clicked');
-                    clearCompleted();
-                }
-            }, 'Clear completed') : null
-        );
-        
-        footerContainer.innerHTML = '';
-        footerContainer.appendChild(createElement(footerContent));
     }
     
     // Nettoyer les ressources
@@ -444,8 +582,17 @@ class TodoAppManager {
         this.listManager?.destroy();
         this.footerUnsubscribe?.();
 
+        // Unmount reactive components
+        if (this.lazyComponentsMounted) {
+            toggleAllComponent.unmount();
+            statsComponent.unmount();
+            filtersComponent.unmount();
+            clearCompletedComponent.unmount();
+        }
+
         this.listManager = null;
         this.footerUnsubscribe = null;
+        this.lazyComponentsMounted = false;
     }
 }
 
@@ -466,6 +613,14 @@ function updateState(updates: Partial<TodoState>): void {
     });
 }
 
+// Modifier l'état avec batching (pour les opérations en masse)
+function updateBatchedState(updates: Partial<TodoState>): void {
+    setBatchedState({
+        ...getCurrentState(),
+        ...updates
+    });
+}
+
 // -----------------------------------------------
 
 // ------------------- Actions -------------------
@@ -480,8 +635,7 @@ function addTodo(text: string): void {
         completed: false
     };
 
-    const currentState = getCurrentState();
-    updateState({ todos: [...currentState.todos, newTodo] });
+    updateState({ todos: [...getCurrentState().todos, newTodo] });
 }
 
 // Basculer l'état d'une todo
@@ -532,7 +686,7 @@ function startEditing(id: string): void {
 // Sauvegarder les modifications
 function saveEdit(id: string, newText: string): void {
     const trimmedText = newText.trim();
-    
+
     if (trimmedText === '') {
         deleteTodo(id);
         return;
@@ -546,15 +700,17 @@ function saveEdit(id: string, newText: string): void {
         return todo;
     });
 
-    updateState({ todos: newTodos, editingId: null });
+    // Use batched state since we're updating both todos and editingId
+    updateBatchedState({ todos: newTodos, editingId: null });
 }
 
 // Supprimer toutes les todos complétées
 function clearCompleted(): void {
     const currentTodos = getCurrentState().todos;
     const newTodos = currentTodos.filter(todo => !todo.completed);
-    
-    updateState({ todos: newTodos });
+
+    // Use batched state since we're potentially removing multiple todos
+    updateBatchedState({ todos: newTodos });
 }
 
 // Annuler l'édition
@@ -565,5 +721,7 @@ function cancelEdit(): void {
 // -----------------------------------------------
 
 // Initialiser l'application TodoMVC
+initFilterRouter(); // Initialize lazy router first
+initPreloadingStrategies(); // Enable preloading strategies
 const appManager = new TodoAppManager(document.getElementById('todo-app')!);
 appManager.initialize();
