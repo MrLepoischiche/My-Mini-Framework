@@ -4,7 +4,7 @@ export * from './core/element';
 export * from './core/lazy';
 export * from './core/memo';
 export * from './core/types';
-export { render, renderElement } from './dom/render';
+export { createElement, render, renderElement } from './dom/render';
 export * from './events/handler';
 export * from './router/hash';
 export * from './router/lazy';
