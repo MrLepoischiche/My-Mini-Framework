@@ -15,6 +15,7 @@ Un framework JavaScript léger avec Virtual DOM, state management réactif, syst
 9. [Lazy Loading](#lazy-loading)
 10. [Routing](#routing)
 11. [Exemples](#exemples)
+12. [Développement de jeux](#développement-de-jeux)
 
 ## Installation
 ```bash
@@ -52,6 +53,14 @@ src/
 ├── router/         # Routing
 │   ├── hash.ts     # Router basé sur hash URLs
 │   └── lazy.ts     # Lazy router avec preloading
+├── game/           # Modules de développement de jeux
+│   ├── math.ts     # Vector2, détection de collision
+│   ├── time.ts     # Timer, Scheduler, DeltaTime
+│   ├── input.ts    # Suivi clavier et souris
+│   ├── animation.ts # Tweening et fonctions d'easing
+│   ├── loop.ts     # Boucle de jeu à pas fixe/variable
+│   ├── entity.ts   # Système entité-composant avec physique
+│   └── network.ts  # Réseau multijoueur (WebSocket)
 ├── utils/          # Utilitaires
 │   ├── id.ts       # Génération d'IDs uniques
 │   ├── equality.ts # Fonctions de comparaison
@@ -857,6 +866,657 @@ npm run dev:todomvc
 - CSS TodoMVC : Inclus automatiquement dans l'exemple
 - Tests : Testez toutes les fonctionnalités dans l'exemple TodoMVC
 
+## Développement de jeux
+
+Le framework inclut une suite complète de modules de développement de jeux pour créer des jeux 2D, des prototypes simples aux jeux multijoueurs en réseau.
+
+### Architecture
+
+Les modules de jeu sont organisés en trois niveaux :
+
+**Niveau 1 - Fondation** :
+- `game/math.ts` : Opérations Vector2 et détection de collision
+- `game/time.ts` : Timers, scheduling et gestion du delta time
+
+**Niveau 2 - Systèmes principaux** :
+- `game/input.ts` : Suivi des entrées clavier et souris
+- `game/animation.ts` : Système de tweening avec fonctions d'easing
+- `game/loop.ts` : Boucle de jeu à pas fixe/variable
+
+**Niveau 3 - Fonctionnalités avancées** :
+- `game/entity.ts` : Système entité-composant avec physique
+- `game/network.ts` : Réseau multijoueur avec WebSocket
+
+Tous les modules sont :
+- **Sans dépendances** : Aucune bibliothèque de jeu externe requise
+- **Tree-shakeable** : Importez uniquement ce dont vous avez besoin
+- **TypeScript-first** : Type safety complète
+- **Modulaires** : Utilisables indépendamment ou ensemble
+- **Intégrés au framework** : Fonctionne parfaitement avec le state management réactif
+
+### Math de jeu
+
+Opérations Vector2 et détection de collision pour jeux 2D.
+
+```ts
+import { Vector2, aabbCollision, circleCollision } from './src/index';
+
+// Créer des vecteurs
+const position = new Vector2(10, 20);
+const velocity = new Vector2(5, 0);
+
+// Opérations vectorielles
+position.add(velocity);           // Addition
+position.subtract(velocity);      // Soustraction
+position.multiply(2);             // Multiplication scalaire
+position.normalize();             // Normaliser en vecteur unitaire
+
+// Utilitaires vectoriels
+const length = position.magnitude();
+const dot = position.dot(velocity);
+const distance = position.distanceTo(new Vector2(100, 100));
+const angle = position.angle();
+
+// Interpolation
+position.lerp(new Vector2(100, 100), 0.1);  // Mouvement fluide
+
+// Détection de collision
+const box1 = { x: 0, y: 0, width: 50, height: 50 };
+const box2 = { x: 25, y: 25, width: 50, height: 50 };
+if (aabbCollision(box1, box2)) {
+    console.log('Collision détectée !');
+}
+
+const circle1 = { x: 0, y: 0, radius: 25 };
+const circle2 = { x: 40, y: 0, radius: 25 };
+if (circleCollision(circle1, circle2)) {
+    console.log('Les cercles se chevauchent !');
+}
+
+// Fonctions utilitaires
+import { clamp, lerp, randomRange, randomInt } from './src/index';
+
+const health = clamp(playerHealth, 0, 100);
+const smoothValue = lerp(current, target, 0.1);
+const randomSpeed = randomRange(5, 10);
+```
+
+**Fonctions disponibles** :
+- Opérations Vector2 : `add`, `subtract`, `multiply`, `divide`, `normalize`
+- Utilitaires Vector2 : `magnitude`, `dot`, `distanceTo`, `angle`, `rotate`, `lerp`, `limit`
+- Collision : `aabbCollision`, `circleCollision`, `circleAABBCollision`
+- Utilitaires math : `clamp`, `lerp`, `randomRange`, `randomInt`, `degToRad`, `radToDeg`
+
+### Temps de jeu
+
+Timers, chronomètres et delta time pour mouvement indépendant des frames.
+
+```ts
+import { Timer, Scheduler, DeltaTime, wait, formatTime } from './src/index';
+
+// Timer (chronomètre avec callbacks)
+const cooldown = new Timer(3000, () => console.log('Prêt !'));
+cooldown.start();
+cooldown.update();  // Appeler dans la boucle de jeu
+
+const progress = cooldown.getProgress();  // 0 à 1
+const remaining = cooldown.getRemaining();  // ms restantes
+
+// Scheduler (délais pausables)
+const scheduler = new Scheduler();
+const taskId = scheduler.delay(() => spawnEnemy(), 5000);
+scheduler.pause();   // Pause toutes les tâches
+scheduler.resume();  // Reprend toutes les tâches
+scheduler.cancel(taskId);  // Annule une tâche spécifique
+
+// Tâches répétitives
+const repeatId = scheduler.repeat(() => updateAI(), 100);
+
+// Delta time (mouvement indépendant des frames)
+const deltaTime = new DeltaTime();
+
+function gameLoop() {
+    const dt = deltaTime.update();  // Temps depuis la dernière frame (ms)
+
+    // Mouvement indépendant des frames
+    player.x += velocity * deltaTime.getDeltaSeconds();
+
+    // Effet ralenti
+    deltaTime.setTimeScale(0.5);  // Demi-vitesse
+
+    const fps = deltaTime.getFPS();
+}
+
+// Utilitaires
+await wait(1000);  // Délai async
+const timeStr = formatTime(125000);  // "02:05"
+const timestamp = timestamp();  // performance.now()
+```
+
+**Classes** :
+- `Timer` : Chronomètre avec pause/reprise et callbacks de complétion
+- `Scheduler` : Planificateur de tâches avec support pause/reprise
+- `DeltaTime` : Timing indépendant des frames avec mise à l'échelle du temps
+
+### Entrées de jeu
+
+Suivi de l'état du clavier et de la souris optimisé pour les jeux.
+
+```ts
+import { getInputManager } from './src/index';
+
+const input = getInputManager();
+
+function gameLoop() {
+    input.update();  // Appeler une fois par frame
+
+    // Clavier - état continu
+    if (input.isKeyDown('ArrowLeft')) {
+        player.x -= 5;
+    }
+    if (input.isKeyDown('ArrowRight')) {
+        player.x += 5;
+    }
+    if (input.isKeyDown(' ')) {  // Barre d'espace
+        player.jump();
+    }
+
+    // Clavier - détection d'une seule pression
+    if (input.wasKeyPressed('e')) {
+        interact();  // Ne se déclenche qu'une fois par pression
+    }
+    if (input.wasKeyReleased('Shift')) {
+        stopSprinting();
+    }
+
+    // Position de la souris
+    const mousePos = input.getMousePosition();
+    aimAt(mousePos.x, mousePos.y);
+
+    // Boutons de souris
+    if (input.isMouseButtonDown(0)) {  // Bouton gauche
+        shoot();
+    }
+    if (input.wasMouseButtonPressed(2)) {  // Bouton droit
+        placeObject();
+    }
+
+    // Molette de souris
+    const wheel = input.getMouseWheel();
+    if (wheel !== 0) {
+        zoom += wheel * 0.1;
+    }
+}
+
+// Nettoyage
+input.destroy();
+```
+
+**API** :
+- Clavier : `isKeyDown(key)`, `wasKeyPressed(key)`, `wasKeyReleased(key)`
+- Position souris : `getMousePosition()` retourne `{x, y}`
+- Boutons souris : `isMouseButtonDown(button)`, `wasMouseButtonPressed(button)`, `wasMouseButtonReleased(button)`
+- Molette souris : `getMouseWheel()` retourne la valeur delta
+
+### Animation de jeu
+
+Système de tweening avec 22 fonctions d'easing pour animations fluides.
+
+```ts
+import {
+    Tween, TweenSequence, getTweenManager, Easing, animate
+} from './src/index';
+
+// Tween simple
+const obj = { x: 0 };
+const tween = new Tween(obj, 'x', 0, 100, 1000, Easing.easeOutQuad);
+tween.onComplete(() => console.log('Terminé !'))
+     .start();
+
+// Mettre à jour les tweens dans la boucle de jeu
+function gameLoop() {
+    getTweenManager().update();
+}
+
+// Séquence de tweens (chaîner les animations)
+const sequence = new TweenSequence()
+    .add(new Tween(player, 'x', 0, 100, 500, Easing.easeInQuad))
+    .add(new Tween(player, 'y', 0, 50, 300, Easing.easeOutBounce))
+    .add(new Tween(player, 'alpha', 1, 0, 200, Easing.linear))
+    .start();
+
+sequence.pause();
+sequence.resume();
+
+// Animation basée sur les Promises
+await animate(0, 100, 1000, Easing.easeInOutQuad)
+    .then(value => console.log('Valeur finale :', value));
+
+// Exemples pratiques
+// Suivi fluide de la caméra
+new Tween(camera, 'x', camera.x, player.x, 500, Easing.easeOutQuad).start();
+
+// Animation de barre de vie
+new Tween(healthBar, 'width', currentWidth, targetWidth, 300, Easing.easeOutCubic).start();
+
+// Fondu d'interface
+new Tween(menu, 'opacity', 0, 1, 400, Easing.easeInOutQuad).start();
+```
+
+**Fonctions d'easing disponibles** :
+- Linéaire : `linear`
+- Quadratique : `easeInQuad`, `easeOutQuad`, `easeInOutQuad`
+- Cubique : `easeInCubic`, `easeOutCubic`, `easeInOutCubic`
+- Quartique : `easeInQuart`, `easeOutQuart`, `easeInOutQuart`
+- Exponentielle : `easeInExpo`, `easeOutExpo`, `easeInOutExpo`
+- Sinusoïdale : `easeInSine`, `easeOutSine`, `easeInOutSine`
+- Circulaire : `easeInCirc`, `easeOutCirc`, `easeInOutCirc`
+- Élastique : `easeInElastic`, `easeOutElastic`, `easeInOutElastic`
+
+### Boucle de jeu
+
+Pas de temps fixe pour la physique et variable pour le rendu.
+
+```ts
+import { getGameLoop } from './src/index';
+
+const gameLoop = getGameLoop();
+
+// Configurer la boucle
+gameLoop.start({
+    onInit: () => {
+        // Initialiser les ressources du jeu
+        loadAssets();
+        setupPlayers();
+    },
+
+    onUpdate: (deltaMs) => {
+        // Mise à jour à pas variable (rendu, entrées, animation)
+        getInputManager().update();
+        getTweenManager().update();
+        updateCamera(deltaMs);
+    },
+
+    onFixedUpdate: (fixedDelta) => {
+        // Mise à jour à pas fixe (simulation physique)
+        // fixedDelta est toujours 16.67ms (60Hz) par défaut
+        updatePhysics(fixedDelta);
+        getEntityManager().fixedUpdate(fixedDelta);
+    },
+
+    onRender: () => {
+        // Rendu
+        clearCanvas();
+        getEntityManager().render(ctx);
+        renderUI();
+    },
+
+    onDestroy: () => {
+        // Nettoyage des ressources
+        unloadAssets();
+    }
+});
+
+// Contrôler la boucle
+gameLoop.pause();
+gameLoop.resume();
+gameLoop.stop();
+
+// FPS et statistiques
+const fps = gameLoop.getFPS();
+const frameCount = gameLoop.getFrameCount();
+
+// Configurer le pas fixe (par défaut : 60 FPS)
+gameLoop.setFixedDelta(16.67);  // 60 FPS
+gameLoop.setFixedDelta(8.33);   // 120 FPS
+```
+
+**Concepts clés** :
+- **Pas fixe** : Mises à jour physiques à taux constant (déterministe)
+- **Pas variable** : Le rendu s'adapte au taux de frames
+- **Hooks de cycle de vie** : Séparation claire des responsabilités
+- **Pause/Reprise** : Contrôle total sur l'exécution du jeu
+
+### Entité de jeu
+
+Système entité-composant avec physique et collision intégrées.
+
+```ts
+import { Entity, EntityManager, getEntityManager } from './src/index';
+
+// Créer une classe d'entité personnalisée
+class Player extends Entity {
+    constructor(x: number, y: number) {
+        super({
+            position: new Vector2(x, y),
+            velocity: new Vector2(0, 0),
+            mass: 1,
+            drag: 0.98,
+            collisionShape: { type: 'circle', radius: 20 },
+            tags: ['player']
+        });
+    }
+
+    onInit() {
+        console.log('Joueur apparu');
+    }
+
+    onUpdate(deltaMs: number) {
+        // Logique de mise à jour personnalisée
+        if (getInputManager().isKeyDown('ArrowRight')) {
+            this.velocity.x = 5;
+        }
+    }
+
+    onCollision(other: Entity) {
+        if (other.hasTag('enemy')) {
+            this.takeDamage(10);
+        }
+    }
+
+    onDestroy() {
+        console.log('Joueur détruit');
+    }
+}
+
+// Gestion des entités
+const manager = getEntityManager();
+const player = new Player(100, 100);
+manager.add(player);
+
+// Physique
+player.applyForce(new Vector2(100, 0));  // Appliquer une force
+player.applyVelocity(16.67);  // Mettre à jour la position selon la physique
+
+// Système de composants
+class HealthComponent implements EntityComponent {
+    constructor(public entity: Entity, private maxHealth: number) {}
+
+    update(deltaMs: number) {
+        // Logique de mise à jour du composant
+    }
+
+    render(ctx?: CanvasRenderingContext2D) {
+        // Rendu de la barre de vie
+    }
+
+    destroy() {
+        // Nettoyage
+    }
+}
+
+player.addComponent('health', new HealthComponent(player, 100));
+const health = player.getComponent<HealthComponent>('health');
+
+// Requêtes
+const players = manager.getByTag('player');
+const enemy = manager.getById('enemy_1');
+const allEntities = manager.getAll();
+
+// Opérations par lots dans la boucle de jeu
+manager.update(deltaMs);        // Mettre à jour toutes les entités actives
+manager.fixedUpdate(16.67);     // Mise à jour physique
+manager.render(ctx);            // Rendre toutes les entités visibles
+manager.checkCollisions();      // Détecter et résoudre les collisions
+
+// Détection de collision
+if (player.checkCollision(enemy)) {
+    console.log('Collision !');
+}
+
+// Transformation et état
+player.active = false;    // Désactiver les mises à jour
+player.visible = false;   // Cacher l'entité
+player.rotation += 0.1;   // Rotation
+player.scale.set(2, 2);   // Agrandir
+```
+
+**Fonctionnalités** :
+- Transformation : position, velocity, acceleration, rotation, scale
+- Physique : application de force, intégration d'Euler, traînée
+- Collision : formes AABB et Cercle avec détection automatique
+- Composants : Architecture de composants enfichables
+- Cycle de vie : onInit, onUpdate, onFixedUpdate, onRender, onDestroy, onCollision
+- Requêtes : Par tag, par ID, obtenir tout
+- Opérations par lots : Mise à jour, rendu et collision pour toutes les entités
+
+### Réseau de jeu
+
+Réseau multijoueur basé sur WebSocket avec synchronisation d'état.
+
+```ts
+import {
+    getNetworkManager,
+    calculateStateDelta,
+    applyStateDelta,
+    interpolateStates,
+    type EntityState
+} from './src/index';
+
+const network = getNetworkManager();
+
+// Se connecter au serveur
+network.connect({
+    url: 'ws://localhost:8080',
+    autoReconnect: true,
+    reconnectDelay: 1000,
+    pingInterval: 5000,
+
+    onOpen: () => {
+        console.log('Connecté au serveur');
+        network.send('JOIN', { playerName: 'Player1' });
+    },
+
+    onClose: () => {
+        console.log('Déconnecté');
+    },
+
+    onError: (event) => {
+        console.error('Erreur de connexion :', event);
+    }
+});
+
+// Envoyer des messages
+network.send('INPUT', { keys: pressedKeys, mouse: mousePos });
+network.send('CHAT', { message: 'Bonjour !' }, 0, true);  // Avec ACK
+
+// Gestionnaires de messages
+network.on('STATE_UPDATE', (message) => {
+    const serverState = message.data;
+    updateGameState(serverState);
+});
+
+network.on('PLAYER_JOINED', (message) => {
+    const player = message.data;
+    spawnPlayer(player);
+});
+
+// Synchronisation d'état
+let previousState: EntityState = {
+    id: 'player1',
+    position: { x: 0, y: 0 },
+    velocity: { x: 0, y: 0 },
+    rotation: 0
+};
+
+function sendPlayerState(player: Entity) {
+    const currentState: EntityState = {
+        id: player.id,
+        position: { x: player.position.x, y: player.position.y },
+        velocity: { x: player.velocity.x, y: player.velocity.y },
+        rotation: player.rotation
+    };
+
+    // Compression delta (n'envoyer que les changements)
+    const delta = calculateStateDelta(previousState, currentState);
+    if (delta) {
+        network.send('STATE_UPDATE', delta);
+        previousState = currentState;
+    }
+}
+
+// Appliquer l'état reçu
+function receivePlayerState(delta: StateDelta) {
+    const newState = applyStateDelta(playerState, delta);
+    playerState = newState;
+}
+
+// Prédiction côté client avec interpolation
+function smoothPlayerMovement(fromState: EntityState, toState: EntityState, t: number) {
+    const interpolated = interpolateStates(fromState, toState, t);
+    player.position.set(interpolated.position.x, interpolated.position.y);
+    player.rotation = interpolated.rotation || 0;
+}
+
+// État de connexion
+if (network.isConnected()) {
+    const latency = network.getLatency();
+    console.log(`Ping : ${latency?.current}ms`);
+}
+
+// Nettoyage
+network.disconnect();
+```
+
+**Fonctionnalités** :
+- Wrapper WebSocket avec auto-reconnexion
+- File de messages avec priorité
+- Système d'accusé de réception pour messages fiables
+- Suivi de latence (ping/pong, mesure RTT)
+- Utilitaires de synchronisation d'état :
+  - `calculateStateDelta` : Compression delta
+  - `applyStateDelta` : Appliquer les deltas à l'état
+  - `interpolateStates` : Prédiction côté client fluide
+- Routage de messages basé sur événements
+
+### Exemple de jeu complet
+
+Voici un jeu simple utilisant tous les modules ensemble :
+
+```ts
+import {
+    getGameLoop, getInputManager, getEntityManager, getTweenManager,
+    Vector2, Entity, Tween, Easing
+} from './src/index';
+
+// Entité joueur
+class Player extends Entity {
+    constructor() {
+        super({
+            position: new Vector2(400, 300),
+            velocity: new Vector2(0, 0),
+            collisionShape: { type: 'circle', radius: 20 },
+            tags: ['player']
+        });
+    }
+
+    onUpdate(deltaMs: number) {
+        const input = getInputManager();
+        const speed = 5;
+
+        // Mouvement
+        this.velocity.set(0, 0);
+        if (input.isKeyDown('ArrowLeft')) this.velocity.x = -speed;
+        if (input.isKeyDown('ArrowRight')) this.velocity.x = speed;
+        if (input.isKeyDown('ArrowUp')) this.velocity.y = -speed;
+        if (input.isKeyDown('ArrowDown')) this.velocity.y = speed;
+
+        // Tirer
+        if (input.wasKeyPressed(' ')) {
+            this.shoot();
+        }
+    }
+
+    shoot() {
+        const bullet = new Bullet(this.position.x, this.position.y);
+        getEntityManager().add(bullet);
+    }
+
+    onCollision(other: Entity) {
+        if (other.hasTag('enemy')) {
+            // Animation de dégâts
+            new Tween(this, 'scale', 1, 1.2, 100, Easing.easeOutQuad)
+                .onComplete(() => {
+                    new Tween(this, 'scale', 1.2, 1, 100, Easing.easeInQuad).start();
+                })
+                .start();
+        }
+    }
+}
+
+// Initialisation du jeu
+const player = new Player();
+getEntityManager().add(player);
+
+// Démarrer la boucle de jeu
+getGameLoop().start({
+    onInit: () => {
+        console.log('Jeu démarré !');
+    },
+
+    onUpdate: (deltaMs) => {
+        getInputManager().update();
+        getTweenManager().update();
+        getEntityManager().update(deltaMs);
+    },
+
+    onFixedUpdate: (fixedDelta) => {
+        getEntityManager().fixedUpdate(fixedDelta);
+        getEntityManager().checkCollisions();
+    },
+
+    onRender: () => {
+        const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
+        const ctx = canvas.getContext('2d')!;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        getEntityManager().render(ctx);
+    }
+});
+```
+
+### Bonnes pratiques pour les modules de jeu
+
+**✅ À faire** :
+- Utiliser le pas fixe pour la physique (`onFixedUpdate`)
+- Utiliser le pas variable pour le rendu et les entrées (`onUpdate`)
+- Appeler `update()` une fois par frame sur les gestionnaires singleton
+- Utiliser la compression delta pour les mises à jour d'état réseau
+- Taguer les entités pour des requêtes efficaces
+- Utiliser l'architecture de composants pour les comportements réutilisables
+- Exploiter le delta time pour un mouvement indépendant des frames
+
+**❌ À ne pas faire** :
+- Mélanger logique physique et logique de rendu
+- Oublier d'appeler `update()` sur les gestionnaires dans la boucle de jeu
+- Créer des entités sans formes de collision si elles en ont besoin
+- Envoyer l'état complet à chaque frame (utiliser la compression delta)
+- Interroger les entités à chaque frame (mettre en cache les résultats si possible)
+- Utiliser le tweening pour un mouvement basé sur la physique
+
+**Intégration avec l'état du framework** :
+```ts
+// État du jeu dans le store du framework
+setState({
+    score: 0,
+    health: 100,
+    gameOver: false
+});
+
+// Mettre à jour depuis la boucle de jeu
+function onPlayerDeath() {
+    setState({ gameOver: true });
+    getGameLoop().pause();
+}
+
+// Réagir aux changements d'état dans l'interface
+const gameUI = () => div(
+    h1(`Score : ${getState('score')}`),
+    div(`Vie : ${getState('health')}`),
+    getState('gameOver') ? div('Game Over !') : null
+);
+```
+
 ## Performance Tips
 
 ### ✅ À faire
@@ -910,3 +1570,12 @@ npm run dev:todomvc
 ### Utils
 - `generateId()` : Générer un ID unique
 - `createStatePath()` : Builder de chemins type-safe
+
+### Modules de jeu
+- **Math** : `Vector2`, `aabbCollision`, `circleCollision`, `circleAABBCollision`, `clamp`, `lerp`, `randomRange`, `randomInt`
+- **Time** : `Timer`, `Scheduler`, `DeltaTime`, `wait`, `formatTime`, `timestamp`
+- **Input** : `getInputManager()`, `InputManager` (suivi clavier/souris)
+- **Animation** : `Tween`, `TweenSequence`, `getTweenManager()`, `Easing`, `animate()`
+- **Loop** : `getGameLoop()`, `GameLoop` (pas fixe/variable)
+- **Entity** : `Entity`, `EntityComponent`, `getEntityManager()`, `EntityManager`
+- **Network** : `NetworkClient`, `getNetworkManager()`, `calculateStateDelta`, `applyStateDelta`, `interpolateStates`

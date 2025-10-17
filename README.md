@@ -15,6 +15,7 @@ A lightweight JavaScript framework with Virtual DOM, reactive state management, 
 9. [Lazy Loading](#lazy-loading)
 10. [Routing](#routing)
 11. [Examples](#examples)
+12. [Game Development](#game-development)
 
 ## Installation
 ```bash
@@ -52,6 +53,14 @@ src/
 ├── router/         # Routing
 │   ├── hash.ts     # Hash-based router
 │   └── lazy.ts     # Lazy router with preloading
+├── game/           # Game development modules
+│   ├── math.ts     # Vector2, collision detection
+│   ├── time.ts     # Timer, Scheduler, DeltaTime
+│   ├── input.ts    # Keyboard and mouse tracking
+│   ├── animation.ts # Tweening and easing functions
+│   ├── loop.ts     # Fixed/variable timestep game loop
+│   ├── entity.ts   # Entity-component system with physics
+│   └── network.ts  # Multiplayer networking (WebSocket)
 ├── utils/          # Utilities
 │   ├── id.ts       # Unique ID generation
 │   ├── equality.ts # Comparison functions
@@ -857,6 +866,657 @@ npm run todomvc
 - TodoMVC CSS: Automatically included in the example
 - Tests: Test all features in the TodoMVC example
 
+## Game Development
+
+The framework includes a comprehensive suite of game development modules for creating 2D games, from simple prototypes to multiplayer networked games.
+
+### Architecture
+
+The game modules are organized into three levels:
+
+**Level 1 - Foundation**:
+- `game/math.ts`: Vector2 operations and collision detection
+- `game/time.ts`: Timers, scheduling, and delta time management
+
+**Level 2 - Core Systems**:
+- `game/input.ts`: Keyboard and mouse input tracking
+- `game/animation.ts`: Tweening system with easing functions
+- `game/loop.ts`: Fixed/variable timestep game loop
+
+**Level 3 - High-level Features**:
+- `game/entity.ts`: Entity-component system with physics
+- `game/network.ts`: Multiplayer networking with WebSocket
+
+All modules are:
+- **Zero dependencies**: No external game libraries required
+- **Tree-shakeable**: Import only what you need
+- **TypeScript-first**: Full type safety
+- **Modular**: Use independently or together
+- **Framework-integrated**: Works seamlessly with reactive state management
+
+### Game Math
+
+Vector2 operations and collision detection for 2D games.
+
+```ts
+import { Vector2, aabbCollision, circleCollision } from './src/index';
+
+// Create vectors
+const position = new Vector2(10, 20);
+const velocity = new Vector2(5, 0);
+
+// Vector operations
+position.add(velocity);           // Addition
+position.subtract(velocity);      // Subtraction
+position.multiply(2);             // Scalar multiplication
+position.normalize();             // Normalize to unit vector
+
+// Vector utilities
+const length = position.magnitude();
+const dot = position.dot(velocity);
+const distance = position.distanceTo(new Vector2(100, 100));
+const angle = position.angle();
+
+// Interpolation
+position.lerp(new Vector2(100, 100), 0.1);  // Smooth movement
+
+// Collision detection
+const box1 = { x: 0, y: 0, width: 50, height: 50 };
+const box2 = { x: 25, y: 25, width: 50, height: 50 };
+if (aabbCollision(box1, box2)) {
+    console.log('Collision detected!');
+}
+
+const circle1 = { x: 0, y: 0, radius: 25 };
+const circle2 = { x: 40, y: 0, radius: 25 };
+if (circleCollision(circle1, circle2)) {
+    console.log('Circles overlap!');
+}
+
+// Utility functions
+import { clamp, lerp, randomRange, randomInt } from './src/index';
+
+const health = clamp(playerHealth, 0, 100);
+const smoothValue = lerp(current, target, 0.1);
+const randomSpeed = randomRange(5, 10);
+```
+
+**Available Functions**:
+- Vector2 operations: `add`, `subtract`, `multiply`, `divide`, `normalize`
+- Vector utilities: `magnitude`, `dot`, `distanceTo`, `angle`, `rotate`, `lerp`, `limit`
+- Collision: `aabbCollision`, `circleCollision`, `circleAABBCollision`
+- Math utilities: `clamp`, `lerp`, `randomRange`, `randomInt`, `degToRad`, `radToDeg`
+
+### Game Time
+
+Timers, stopwatches, and delta time for frame-independent movement.
+
+```ts
+import { Timer, Scheduler, DeltaTime, wait, formatTime } from './src/index';
+
+// Timer (stopwatch with callbacks)
+const cooldown = new Timer(3000, () => console.log('Ready!'));
+cooldown.start();
+cooldown.update();  // Call in game loop
+
+const progress = cooldown.getProgress();  // 0 to 1
+const remaining = cooldown.getRemaining();  // ms left
+
+// Scheduler (pauseable delays)
+const scheduler = new Scheduler();
+const taskId = scheduler.delay(() => spawnEnemy(), 5000);
+scheduler.pause();   // Pause all tasks
+scheduler.resume();  // Resume all tasks
+scheduler.cancel(taskId);  // Cancel specific task
+
+// Repeating tasks
+const repeatId = scheduler.repeat(() => updateAI(), 100);
+
+// Delta time (frame-independent movement)
+const deltaTime = new DeltaTime();
+
+function gameLoop() {
+    const dt = deltaTime.update();  // Time since last frame (ms)
+
+    // Frame-independent movement
+    player.x += velocity * deltaTime.getDeltaSeconds();
+
+    // Slow motion effect
+    deltaTime.setTimeScale(0.5);  // Half speed
+
+    const fps = deltaTime.getFPS();
+}
+
+// Utilities
+await wait(1000);  // Async delay
+const timeStr = formatTime(125000);  // "02:05"
+const timestamp = timestamp();  // performance.now()
+```
+
+**Classes**:
+- `Timer`: Stopwatch with pause/resume and completion callbacks
+- `Scheduler`: Task scheduler with pause/resume support
+- `DeltaTime`: Frame-independent timing with time scaling
+
+### Game Input
+
+Keyboard and mouse state tracking optimized for games.
+
+```ts
+import { getInputManager } from './src/index';
+
+const input = getInputManager();
+
+function gameLoop() {
+    input.update();  // Call once per frame
+
+    // Keyboard - continuous state
+    if (input.isKeyDown('ArrowLeft')) {
+        player.x -= 5;
+    }
+    if (input.isKeyDown('ArrowRight')) {
+        player.x += 5;
+    }
+    if (input.isKeyDown(' ')) {  // Spacebar
+        player.jump();
+    }
+
+    // Keyboard - single press detection
+    if (input.wasKeyPressed('e')) {
+        interact();  // Only triggers once per press
+    }
+    if (input.wasKeyReleased('Shift')) {
+        stopSprinting();
+    }
+
+    // Mouse position
+    const mousePos = input.getMousePosition();
+    aimAt(mousePos.x, mousePos.y);
+
+    // Mouse buttons
+    if (input.isMouseButtonDown(0)) {  // Left button
+        shoot();
+    }
+    if (input.wasMouseButtonPressed(2)) {  // Right button
+        placeObject();
+    }
+
+    // Mouse wheel
+    const wheel = input.getMouseWheel();
+    if (wheel !== 0) {
+        zoom += wheel * 0.1;
+    }
+}
+
+// Cleanup
+input.destroy();
+```
+
+**API**:
+- Keyboard: `isKeyDown(key)`, `wasKeyPressed(key)`, `wasKeyReleased(key)`
+- Mouse position: `getMousePosition()` returns `{x, y}`
+- Mouse buttons: `isMouseButtonDown(button)`, `wasMouseButtonPressed(button)`, `wasMouseButtonReleased(button)`
+- Mouse wheel: `getMouseWheel()` returns delta value
+
+### Game Animation
+
+Tweening system with 22 easing functions for smooth animations.
+
+```ts
+import {
+    Tween, TweenSequence, getTweenManager, Easing, animate
+} from './src/index';
+
+// Simple tween
+const obj = { x: 0 };
+const tween = new Tween(obj, 'x', 0, 100, 1000, Easing.easeOutQuad);
+tween.onComplete(() => console.log('Done!'))
+     .start();
+
+// Update tweens in game loop
+function gameLoop() {
+    getTweenManager().update();
+}
+
+// Tween sequence (chain animations)
+const sequence = new TweenSequence()
+    .add(new Tween(player, 'x', 0, 100, 500, Easing.easeInQuad))
+    .add(new Tween(player, 'y', 0, 50, 300, Easing.easeOutBounce))
+    .add(new Tween(player, 'alpha', 1, 0, 200, Easing.linear))
+    .start();
+
+sequence.pause();
+sequence.resume();
+
+// Promise-based animation
+await animate(0, 100, 1000, Easing.easeInOutQuad)
+    .then(value => console.log('Final value:', value));
+
+// Practical examples
+// Smooth camera follow
+new Tween(camera, 'x', camera.x, player.x, 500, Easing.easeOutQuad).start();
+
+// Health bar animation
+new Tween(healthBar, 'width', currentWidth, targetWidth, 300, Easing.easeOutCubic).start();
+
+// UI fade in
+new Tween(menu, 'opacity', 0, 1, 400, Easing.easeInOutQuad).start();
+```
+
+**Available Easing Functions**:
+- Linear: `linear`
+- Quadratic: `easeInQuad`, `easeOutQuad`, `easeInOutQuad`
+- Cubic: `easeInCubic`, `easeOutCubic`, `easeInOutCubic`
+- Quartic: `easeInQuart`, `easeOutQuart`, `easeInOutQuart`
+- Exponential: `easeInExpo`, `easeOutExpo`, `easeInOutExpo`
+- Sine: `easeInSine`, `easeOutSine`, `easeInOutSine`
+- Circular: `easeInCirc`, `easeOutCirc`, `easeInOutCirc`
+- Elastic: `easeInElastic`, `easeOutElastic`, `easeInOutElastic`
+
+### Game Loop
+
+Fixed timestep for physics and variable timestep for rendering.
+
+```ts
+import { getGameLoop } from './src/index';
+
+const gameLoop = getGameLoop();
+
+// Configure the loop
+gameLoop.start({
+    onInit: () => {
+        // Initialize game resources
+        loadAssets();
+        setupPlayers();
+    },
+
+    onUpdate: (deltaMs) => {
+        // Variable timestep update (rendering, input, animation)
+        getInputManager().update();
+        getTweenManager().update();
+        updateCamera(deltaMs);
+    },
+
+    onFixedUpdate: (fixedDelta) => {
+        // Fixed timestep update (physics simulation)
+        // fixedDelta is always 16.67ms (60Hz) by default
+        updatePhysics(fixedDelta);
+        getEntityManager().fixedUpdate(fixedDelta);
+    },
+
+    onRender: () => {
+        // Rendering
+        clearCanvas();
+        getEntityManager().render(ctx);
+        renderUI();
+    },
+
+    onDestroy: () => {
+        // Cleanup resources
+        unloadAssets();
+    }
+});
+
+// Control the loop
+gameLoop.pause();
+gameLoop.resume();
+gameLoop.stop();
+
+// FPS and statistics
+const fps = gameLoop.getFPS();
+const frameCount = gameLoop.getFrameCount();
+
+// Configure fixed timestep (default: 60 FPS)
+gameLoop.setFixedDelta(16.67);  // 60 FPS
+gameLoop.setFixedDelta(8.33);   // 120 FPS
+```
+
+**Key Concepts**:
+- **Fixed Timestep**: Physics updates at constant rate (deterministic)
+- **Variable Timestep**: Rendering adapts to frame rate
+- **Lifecycle Hooks**: Clean separation of concerns
+- **Pause/Resume**: Full control over game execution
+
+### Game Entity
+
+Entity-component system with built-in physics and collision.
+
+```ts
+import { Entity, EntityManager, getEntityManager } from './src/index';
+
+// Create custom entity class
+class Player extends Entity {
+    constructor(x: number, y: number) {
+        super({
+            position: new Vector2(x, y),
+            velocity: new Vector2(0, 0),
+            mass: 1,
+            drag: 0.98,
+            collisionShape: { type: 'circle', radius: 20 },
+            tags: ['player']
+        });
+    }
+
+    onInit() {
+        console.log('Player spawned');
+    }
+
+    onUpdate(deltaMs: number) {
+        // Custom update logic
+        if (getInputManager().isKeyDown('ArrowRight')) {
+            this.velocity.x = 5;
+        }
+    }
+
+    onCollision(other: Entity) {
+        if (other.hasTag('enemy')) {
+            this.takeDamage(10);
+        }
+    }
+
+    onDestroy() {
+        console.log('Player destroyed');
+    }
+}
+
+// Entity management
+const manager = getEntityManager();
+const player = new Player(100, 100);
+manager.add(player);
+
+// Physics
+player.applyForce(new Vector2(100, 0));  // Apply force
+player.applyVelocity(16.67);  // Update position based on physics
+
+// Component system
+class HealthComponent implements EntityComponent {
+    constructor(public entity: Entity, private maxHealth: number) {}
+
+    update(deltaMs: number) {
+        // Update component logic
+    }
+
+    render(ctx?: CanvasRenderingContext2D) {
+        // Render health bar
+    }
+
+    destroy() {
+        // Cleanup
+    }
+}
+
+player.addComponent('health', new HealthComponent(player, 100));
+const health = player.getComponent<HealthComponent>('health');
+
+// Querying
+const players = manager.getByTag('player');
+const enemy = manager.getById('enemy_1');
+const allEntities = manager.getAll();
+
+// Batch operations in game loop
+manager.update(deltaMs);        // Update all active entities
+manager.fixedUpdate(16.67);     // Physics update
+manager.render(ctx);            // Render all visible entities
+manager.checkCollisions();      // Detect and resolve collisions
+
+// Collision detection
+if (player.checkCollision(enemy)) {
+    console.log('Collision!');
+}
+
+// Transform and state
+player.active = false;    // Disable updates
+player.visible = false;   // Hide entity
+player.rotation += 0.1;   // Rotate
+player.scale.set(2, 2);   // Scale up
+```
+
+**Features**:
+- Transform: position, velocity, acceleration, rotation, scale
+- Physics: force application, Euler integration, drag
+- Collision: AABB and Circle shapes with automatic detection
+- Components: Pluggable component architecture
+- Lifecycle: onInit, onUpdate, onFixedUpdate, onRender, onDestroy, onCollision
+- Query: By tag, by ID, get all
+- Batch operations: Update, render, and collision for all entities
+
+### Game Network
+
+WebSocket-based multiplayer networking with state synchronization.
+
+```ts
+import {
+    getNetworkManager,
+    calculateStateDelta,
+    applyStateDelta,
+    interpolateStates,
+    type EntityState
+} from './src/index';
+
+const network = getNetworkManager();
+
+// Connect to server
+network.connect({
+    url: 'ws://localhost:8080',
+    autoReconnect: true,
+    reconnectDelay: 1000,
+    pingInterval: 5000,
+
+    onOpen: () => {
+        console.log('Connected to server');
+        network.send('JOIN', { playerName: 'Player1' });
+    },
+
+    onClose: () => {
+        console.log('Disconnected');
+    },
+
+    onError: (event) => {
+        console.error('Connection error:', event);
+    }
+});
+
+// Send messages
+network.send('INPUT', { keys: pressedKeys, mouse: mousePos });
+network.send('CHAT', { message: 'Hello!' }, 0, true);  // With ACK
+
+// Message handlers
+network.on('STATE_UPDATE', (message) => {
+    const serverState = message.data;
+    updateGameState(serverState);
+});
+
+network.on('PLAYER_JOINED', (message) => {
+    const player = message.data;
+    spawnPlayer(player);
+});
+
+// State synchronization
+let previousState: EntityState = {
+    id: 'player1',
+    position: { x: 0, y: 0 },
+    velocity: { x: 0, y: 0 },
+    rotation: 0
+};
+
+function sendPlayerState(player: Entity) {
+    const currentState: EntityState = {
+        id: player.id,
+        position: { x: player.position.x, y: player.position.y },
+        velocity: { x: player.velocity.x, y: player.velocity.y },
+        rotation: player.rotation
+    };
+
+    // Delta compression (only send changes)
+    const delta = calculateStateDelta(previousState, currentState);
+    if (delta) {
+        network.send('STATE_UPDATE', delta);
+        previousState = currentState;
+    }
+}
+
+// Apply received state
+function receivePlayerState(delta: StateDelta) {
+    const newState = applyStateDelta(playerState, delta);
+    playerState = newState;
+}
+
+// Client-side prediction with interpolation
+function smoothPlayerMovement(fromState: EntityState, toState: EntityState, t: number) {
+    const interpolated = interpolateStates(fromState, toState, t);
+    player.position.set(interpolated.position.x, interpolated.position.y);
+    player.rotation = interpolated.rotation || 0;
+}
+
+// Connection status
+if (network.isConnected()) {
+    const latency = network.getLatency();
+    console.log(`Ping: ${latency?.current}ms`);
+}
+
+// Cleanup
+network.disconnect();
+```
+
+**Features**:
+- WebSocket wrapper with auto-reconnect
+- Message queue with priority
+- Acknowledgment system for reliable messages
+- Latency tracking (ping/pong, RTT measurement)
+- State synchronization utilities:
+  - `calculateStateDelta`: Delta compression
+  - `applyStateDelta`: Apply deltas to state
+  - `interpolateStates`: Smooth client-side prediction
+- Event-based message routing
+
+### Complete Game Example
+
+Here's a simple game using all modules together:
+
+```ts
+import {
+    getGameLoop, getInputManager, getEntityManager, getTweenManager,
+    Vector2, Entity, Tween, Easing
+} from './src/index';
+
+// Player entity
+class Player extends Entity {
+    constructor() {
+        super({
+            position: new Vector2(400, 300),
+            velocity: new Vector2(0, 0),
+            collisionShape: { type: 'circle', radius: 20 },
+            tags: ['player']
+        });
+    }
+
+    onUpdate(deltaMs: number) {
+        const input = getInputManager();
+        const speed = 5;
+
+        // Movement
+        this.velocity.set(0, 0);
+        if (input.isKeyDown('ArrowLeft')) this.velocity.x = -speed;
+        if (input.isKeyDown('ArrowRight')) this.velocity.x = speed;
+        if (input.isKeyDown('ArrowUp')) this.velocity.y = -speed;
+        if (input.isKeyDown('ArrowDown')) this.velocity.y = speed;
+
+        // Shoot
+        if (input.wasKeyPressed(' ')) {
+            this.shoot();
+        }
+    }
+
+    shoot() {
+        const bullet = new Bullet(this.position.x, this.position.y);
+        getEntityManager().add(bullet);
+    }
+
+    onCollision(other: Entity) {
+        if (other.hasTag('enemy')) {
+            // Damage animation
+            new Tween(this, 'scale', 1, 1.2, 100, Easing.easeOutQuad)
+                .onComplete(() => {
+                    new Tween(this, 'scale', 1.2, 1, 100, Easing.easeInQuad).start();
+                })
+                .start();
+        }
+    }
+}
+
+// Game initialization
+const player = new Player();
+getEntityManager().add(player);
+
+// Start game loop
+getGameLoop().start({
+    onInit: () => {
+        console.log('Game started!');
+    },
+
+    onUpdate: (deltaMs) => {
+        getInputManager().update();
+        getTweenManager().update();
+        getEntityManager().update(deltaMs);
+    },
+
+    onFixedUpdate: (fixedDelta) => {
+        getEntityManager().fixedUpdate(fixedDelta);
+        getEntityManager().checkCollisions();
+    },
+
+    onRender: () => {
+        const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
+        const ctx = canvas.getContext('2d')!;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        getEntityManager().render(ctx);
+    }
+});
+```
+
+### Game Module Best Practices
+
+**✅ Do**:
+- Use fixed timestep for physics (`onFixedUpdate`)
+- Use variable timestep for rendering and input (`onUpdate`)
+- Call `update()` once per frame on singleton managers
+- Use delta compression for network state updates
+- Tag entities for efficient querying
+- Use component architecture for reusable behaviors
+- Leverage delta time for frame-independent movement
+
+**❌ Don't**:
+- Mix physics logic with rendering logic
+- Forget to call `update()` on managers in the game loop
+- Create entities without collision shapes if they need collision
+- Send full state every frame (use delta compression)
+- Query entities every frame (cache results when possible)
+- Use tweening for physics-based movement
+
+**Integration with Framework State**:
+```ts
+// Game state in framework store
+setState({
+    score: 0,
+    health: 100,
+    gameOver: false
+});
+
+// Update from game loop
+function onPlayerDeath() {
+    setState({ gameOver: true });
+    getGameLoop().pause();
+}
+
+// React to state changes in UI
+const gameUI = () => div(
+    h1(`Score: ${getState('score')}`),
+    div(`Health: ${getState('health')}`),
+    getState('gameOver') ? div('Game Over!') : null
+);
+```
+
 ## Performance Tips
 
 ### ✅ Do
@@ -910,3 +1570,12 @@ npm run todomvc
 ### Utils
 - `generateId()`: Generate a unique ID
 - `createStatePath()`: Type-safe path builder
+
+### Game Modules
+- **Math**: `Vector2`, `aabbCollision`, `circleCollision`, `circleAABBCollision`, `clamp`, `lerp`, `randomRange`, `randomInt`
+- **Time**: `Timer`, `Scheduler`, `DeltaTime`, `wait`, `formatTime`, `timestamp`
+- **Input**: `getInputManager()`, `InputManager` (keyboard/mouse tracking)
+- **Animation**: `Tween`, `TweenSequence`, `getTweenManager()`, `Easing`, `animate()`
+- **Loop**: `getGameLoop()`, `GameLoop` (fixed/variable timestep)
+- **Entity**: `Entity`, `EntityComponent`, `getEntityManager()`, `EntityManager`
+- **Network**: `NetworkClient`, `getNetworkManager()`, `calculateStateDelta`, `applyStateDelta`, `interpolateStates`

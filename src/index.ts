@@ -12,3 +12,12 @@ export * from './state/store';
 export * from './utils/equality';
 export * from './utils/id';
 export * from './utils/pathBuilder';
+
+// Game utilities (optional)
+export * from './game/math';
+export * from './game/time';
+export * from './game/input';
+export * from './game/animation';
+export * from './game/loop';
+export * from './game/entity';
+export * from './game/network';
